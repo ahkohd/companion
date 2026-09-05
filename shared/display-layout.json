@@ -1,0 +1,5 @@
+{
+  "defaultGap": 8,
+  "gaps": [4, 8, 16],
+  "screenSize": 466
+}

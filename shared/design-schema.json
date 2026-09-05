@@ -1,0 +1,690 @@
+{
+  "usage": [
+    {
+      "key": "x",
+      "label": "Left edge",
+      "group": "Layout",
+      "default": 63,
+      "min": 20,
+      "max": 160
+    },
+    {
+      "key": "offsetY",
+      "label": "Vertical offset",
+      "group": "Layout",
+      "default": 0,
+      "min": -60,
+      "max": 60
+    },
+    {
+      "key": "width",
+      "label": "Card width",
+      "group": "Layout",
+      "default": 340,
+      "min": 180,
+      "max": 426
+    },
+    {
+      "key": "height",
+      "label": "Card height",
+      "group": "Layout",
+      "default": 150,
+      "min": 110,
+      "max": 190
+    },
+    {
+      "key": "rowGap",
+      "label": "Extra row gap",
+      "group": "Layout",
+      "default": -8,
+      "min": -8,
+      "max": 40
+    },
+    {
+      "key": "padding",
+      "label": "Horizontal padding",
+      "group": "Layout",
+      "default": 16,
+      "min": 4,
+      "max": 40
+    },
+    {
+      "key": "radius",
+      "label": "Corner radius",
+      "group": "Layout",
+      "default": 16,
+      "min": 0,
+      "max": 40
+    },
+    {
+      "key": "titleY",
+      "label": "Provider position",
+      "group": "Spacing",
+      "default": 15,
+      "min": 0,
+      "max": 80
+    },
+    {
+      "key": "valueOffset",
+      "label": "Percentage offset",
+      "group": "Spacing",
+      "default": 0,
+      "min": -20,
+      "max": 30
+    },
+    {
+      "key": "barY",
+      "label": "Progress position",
+      "group": "Spacing",
+      "default": 98,
+      "min": 60,
+      "max": 150
+    },
+    {
+      "key": "resetY",
+      "label": "Reset position",
+      "group": "Spacing",
+      "default": 113,
+      "min": 90,
+      "max": 166
+    },
+    {
+      "key": "pillY",
+      "label": "Badge position",
+      "group": "Spacing",
+      "default": 48,
+      "min": 20,
+      "max": 100
+    },
+    {
+      "key": "numberSize",
+      "label": "Percentage size",
+      "group": "Typography",
+      "default": 57,
+      "min": 24,
+      "max": 160,
+      "allowAuto": true,
+      "unit": "px"
+    },
+    {
+      "key": "titleSize",
+      "label": "Provider size",
+      "group": "Typography",
+      "default": 16,
+      "min": 12,
+      "max": 48,
+      "unit": "px"
+    },
+    {
+      "key": "resetSize",
+      "label": "Reset size",
+      "group": "Typography",
+      "default": 16,
+      "min": 12,
+      "max": 48,
+      "unit": "px"
+    },
+    {
+      "key": "barHeight",
+      "label": "Progress thickness",
+      "group": "Progress bar",
+      "default": 10,
+      "min": 2,
+      "max": 24
+    },
+    {
+      "key": "pillHeight",
+      "label": "Badge height",
+      "group": "Badge",
+      "default": 28,
+      "min": 24,
+      "max": 44
+    },
+    {
+      "key": "pillPadding",
+      "label": "Badge padding",
+      "group": "Badge",
+      "default": 11,
+      "min": 4,
+      "max": 24
+    },
+    {
+      "key": "textColor",
+      "label": "Primary text",
+      "group": "Colours",
+      "default": 15920634,
+      "min": 0,
+      "max": 16777215,
+      "type": "color"
+    },
+    {
+      "key": "mutedColor",
+      "label": "Secondary text",
+      "group": "Colours",
+      "default": 9800868,
+      "min": 0,
+      "max": 16777215,
+      "type": "color"
+    },
+    {
+      "key": "cardColor",
+      "label": "Card background",
+      "group": "Colours",
+      "default": 1381653,
+      "min": 0,
+      "max": 16777215,
+      "type": "color"
+    },
+    {
+      "key": "trackColor",
+      "label": "Progress track",
+      "group": "Colours",
+      "default": 2829099,
+      "min": 0,
+      "max": 16777215,
+      "type": "color"
+    },
+    {
+      "key": "fillColor",
+      "label": "Healthy balance",
+      "group": "Colours",
+      "default": 6668684,
+      "min": 0,
+      "max": 16777215,
+      "type": "color"
+    },
+    {
+      "key": "lowColor",
+      "label": "Low balance",
+      "group": "Colours",
+      "default": 15238019,
+      "min": 0,
+      "max": 16777215,
+      "type": "color"
+    },
+    {
+      "key": "warnColor",
+      "label": "Medium balance",
+      "group": "Colours",
+      "default": 14269825,
+      "min": 0,
+      "max": 16777215,
+      "type": "color"
+    },
+    {
+      "key": "barStyle",
+      "label": "Progress style",
+      "group": "Progress bar",
+      "default": 0,
+      "min": 0,
+      "max": 2,
+      "options": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "key": "barPixelSize",
+      "label": "Pixel size",
+      "group": "Progress bar",
+      "default": 4,
+      "min": 2,
+      "max": 16,
+      "unit": "px"
+    },
+    {
+      "key": "barPixelGap",
+      "label": "Pixel spacing",
+      "group": "Progress bar",
+      "default": 2,
+      "min": 0,
+      "max": 8,
+      "unit": "px"
+    }
+  ],
+  "hey": [
+    {
+      "key": "x",
+      "label": "Left edge",
+      "group": "Layout",
+      "default": 63,
+      "min": 20,
+      "max": 160
+    },
+    {
+      "key": "y",
+      "label": "Top edge",
+      "group": "Layout",
+      "default": 85,
+      "min": 20,
+      "max": 200
+    },
+    {
+      "key": "width",
+      "label": "Card width",
+      "group": "Layout",
+      "default": 340,
+      "min": 180,
+      "max": 426
+    },
+    {
+      "key": "height",
+      "label": "Card height",
+      "group": "Layout",
+      "default": 136,
+      "min": 80,
+      "max": 180
+    },
+    {
+      "key": "gap",
+      "label": "Space between messages",
+      "group": "Layout",
+      "default": 12,
+      "min": 0,
+      "max": 60
+    },
+    {
+      "key": "padding",
+      "label": "Horizontal padding",
+      "group": "Layout",
+      "default": 16,
+      "min": 4,
+      "max": 40
+    },
+    {
+      "key": "radius",
+      "label": "Corner radius",
+      "group": "Layout",
+      "default": 16,
+      "min": 0,
+      "max": 40
+    },
+    {
+      "key": "senderY",
+      "label": "Sender position",
+      "group": "Spacing",
+      "default": 12,
+      "min": 0,
+      "max": 50
+    },
+    {
+      "key": "subjectY",
+      "label": "Subject position",
+      "group": "Spacing",
+      "default": 56,
+      "min": 24,
+      "max": 100
+    },
+    {
+      "key": "senderSize",
+      "label": "Sender size",
+      "group": "Typography",
+      "default": 28,
+      "min": 12,
+      "max": 48,
+      "unit": "px"
+    },
+    {
+      "key": "subjectSize",
+      "label": "Subject size",
+      "group": "Typography",
+      "default": 28,
+      "min": 12,
+      "max": 48,
+      "unit": "px"
+    },
+    {
+      "key": "lines",
+      "label": "Subject lines",
+      "group": "Typography",
+      "default": 2,
+      "min": 1,
+      "max": 3,
+      "options": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "key": "rows",
+      "label": "Messages per page",
+      "group": "Layout",
+      "default": 2,
+      "min": 1,
+      "max": 3,
+      "options": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "key": "textColor",
+      "label": "Primary text",
+      "group": "Colours",
+      "default": 15920634,
+      "min": 0,
+      "max": 16777215,
+      "type": "color"
+    },
+    {
+      "key": "mutedColor",
+      "label": "Secondary text",
+      "group": "Colours",
+      "default": 9800868,
+      "min": 0,
+      "max": 16777215,
+      "type": "color"
+    },
+    {
+      "key": "cardColor",
+      "label": "Card background",
+      "group": "Colours",
+      "default": 1381653,
+      "min": 0,
+      "max": 16777215,
+      "type": "color"
+    }
+  ],
+  "clock": [
+    {
+      "key": "x",
+      "label": "Left edge",
+      "group": "Layout",
+      "default": 33,
+      "min": 0,
+      "max": 160
+    },
+    {
+      "key": "y",
+      "label": "Time position",
+      "group": "Layout",
+      "default": 155,
+      "min": 40,
+      "max": 290
+    },
+    {
+      "key": "width",
+      "label": "Time width",
+      "group": "Layout",
+      "default": 400,
+      "min": 160,
+      "max": 466
+    },
+    {
+      "key": "dayY",
+      "label": "Weekday position",
+      "group": "Layout",
+      "default": 308,
+      "min": 100,
+      "max": 410
+    },
+    {
+      "key": "timeSize",
+      "label": "Time size",
+      "group": "Typography",
+      "default": 128,
+      "min": 24,
+      "max": 160,
+      "unit": "px"
+    },
+    {
+      "key": "daySize",
+      "label": "Weekday size",
+      "group": "Typography",
+      "default": 22,
+      "min": 12,
+      "max": 48,
+      "unit": "px"
+    },
+    {
+      "key": "align",
+      "label": "Alignment",
+      "group": "Layout",
+      "default": 1,
+      "min": 0,
+      "max": 2,
+      "options": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "key": "textColor",
+      "label": "Primary text",
+      "group": "Colours",
+      "default": 15920634,
+      "min": 0,
+      "max": 16777215,
+      "type": "color"
+    },
+    {
+      "key": "mutedColor",
+      "label": "Secondary text",
+      "group": "Colours",
+      "default": 9800868,
+      "min": 0,
+      "max": 16777215,
+      "type": "color"
+    }
+  ],
+  "face": [
+    {
+      "key": "titleOffset",
+      "label": "Status vertical offset",
+      "group": "Layout",
+      "default": 0,
+      "min": -100,
+      "max": 40
+    },
+    {
+      "key": "nameY",
+      "label": "Session position",
+      "group": "Layout",
+      "default": 395,
+      "min": 260,
+      "max": 430
+    },
+    {
+      "key": "titleSize",
+      "label": "Status size",
+      "group": "Typography",
+      "default": 22,
+      "min": 12,
+      "max": 48,
+      "unit": "px"
+    },
+    {
+      "key": "nameSize",
+      "label": "Session size",
+      "group": "Typography",
+      "default": 16,
+      "min": 12,
+      "max": 48,
+      "unit": "px"
+    },
+    {
+      "key": "titleWidth",
+      "label": "Status width",
+      "group": "Layout",
+      "default": 340,
+      "min": 180,
+      "max": 420
+    },
+    {
+      "key": "nameWidth",
+      "label": "Session width",
+      "group": "Layout",
+      "default": 260,
+      "min": 160,
+      "max": 380
+    },
+    {
+      "key": "textColor",
+      "label": "Primary text",
+      "group": "Colours",
+      "default": 15920634,
+      "min": 0,
+      "max": 16777215,
+      "type": "color"
+    },
+    {
+      "key": "mutedColor",
+      "label": "Secondary text",
+      "group": "Colours",
+      "default": 8287884,
+      "min": 0,
+      "max": 16777215,
+      "type": "color"
+    },
+    {
+      "key": "scale",
+      "label": "Face size",
+      "group": "Animation",
+      "default": 100,
+      "min": 50,
+      "max": 150,
+      "unit": "%"
+    }
+  ],
+  "roon": [
+    {
+      "key": "artY",
+      "label": "Artwork position",
+      "group": "Artwork",
+      "default": 70,
+      "min": 0,
+      "max": 340
+    },
+    {
+      "key": "artSize",
+      "label": "Artwork size",
+      "group": "Artwork",
+      "default": 190,
+      "min": 80,
+      "max": 300
+    },
+    {
+      "key": "artRadius",
+      "label": "Artwork corners",
+      "group": "Artwork",
+      "default": 16,
+      "min": 0,
+      "max": 80
+    },
+    {
+      "key": "titleY",
+      "label": "Title position",
+      "group": "Typography",
+      "default": 280,
+      "min": 0,
+      "max": 430
+    },
+    {
+      "key": "titleSize",
+      "label": "Title size",
+      "group": "Typography",
+      "default": 28,
+      "min": 12,
+      "max": 48,
+      "unit": "px"
+    },
+    {
+      "key": "artistY",
+      "label": "Artist position",
+      "group": "Typography",
+      "default": 316,
+      "min": 0,
+      "max": 430
+    },
+    {
+      "key": "artistSize",
+      "label": "Artist size",
+      "group": "Typography",
+      "default": 21,
+      "min": 12,
+      "max": 48,
+      "unit": "px"
+    },
+    {
+      "key": "controlsY",
+      "label": "Controls position",
+      "group": "Controls",
+      "default": 358,
+      "min": 0,
+      "max": 420
+    },
+    {
+      "key": "controlSize",
+      "label": "Button size",
+      "group": "Controls",
+      "default": 64,
+      "min": 28,
+      "max": 72
+    },
+    {
+      "key": "gap",
+      "label": "Button spacing",
+      "group": "Controls",
+      "default": 12,
+      "min": 8,
+      "max": 50
+    },
+    {
+      "key": "textColor",
+      "label": "Primary text",
+      "group": "Colours",
+      "default": 15920634,
+      "min": 0,
+      "max": 16777215,
+      "type": "color"
+    },
+    {
+      "key": "mutedColor",
+      "label": "Secondary text",
+      "group": "Colours",
+      "default": 9800868,
+      "min": 0,
+      "max": 16777215,
+      "type": "color"
+    },
+    {
+      "key": "accentColor",
+      "label": "Playing indicator",
+      "group": "Colours",
+      "default": 6668684,
+      "min": 0,
+      "max": 16777215,
+      "type": "color"
+    },
+    {
+      "key": "animateArtwork",
+      "label": "Animate artwork expansion",
+      "group": "Motion",
+      "default": 0,
+      "min": 0,
+      "max": 1,
+      "options": [
+        0,
+        1
+      ],
+      "type": "toggle"
+    },
+    {
+      "key": "spinArtwork",
+      "label": "Spin expanded artwork",
+      "group": "Motion",
+      "default": 0,
+      "min": 0,
+      "max": 1,
+      "options": [
+        0,
+        1
+      ],
+      "type": "toggle"
+    }
+  ]
+}

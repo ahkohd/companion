@@ -1,0 +1,8 @@
+{
+  "working": "Working",
+  "blocked": "Needs your input",
+  "done": "Ready",
+  "idle": "Idle",
+  "sleep": "Sleeping",
+  "unknown": "Status unknown"
+}

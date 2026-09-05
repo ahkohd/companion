@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "appearance": {
+    "theme": "dark",
+    "direction": "ltr",
+    "reducedMotion": false
+  },
+  "device": {
+    "textGap": 8,
+    "followMouse": true,
+    "mouseInterval": 1000,
+    "swipeEnabled": true,
+    "showModuleNavigation": false,
+    "showCardBackgrounds": false,
+    "activeModule": "face",
+    "moduleOrder": [
+      "hey",
+      "clock",
+      "face",
+      "usage",
+      "roon"
+    ],
+    "rotation": 0
+  },
+  "modules": {
+    "face": {
+      "enabled": true
+    },
+    "usage": {
+      "enabled": true,
+      "providers": [],
+      "provider": "auto",
+      "refreshSeconds": 60
+    },
+    "hey": {
+      "enabled": true,
+      "box": "imbox",
+      "refreshSeconds": 60
+    },
+    "clock": {
+      "enabled": true,
+      "hourFormat": "12",
+      "showWeekday": true,
+      "blinkSeparator": true
+    },
+    "roon": {
+      "enabled": false,
+      "host": "",
+      "zoneId": ""
+    }
+  },
+  "mappings": {
+    "working": null,
+    "blocked": null,
+    "done": null,
+    "idle": null,
+    "unknown": null,
+    "disconnected": null
+  },
+  "design": {
+    "usage": {
+      "x": 63,
+      "offsetY": 0,
+      "width": 340,
+      "height": 150,
+      "rowGap": -8,
+      "padding": 16,
+      "radius": 16,
+      "titleY": 15,
+      "valueOffset": 0,
+      "barY": 98,
+      "resetY": 113,
+      "pillY": 48,
+      "numberSize": 57,
+      "titleSize": 16,
+      "resetSize": 16,
+      "barHeight": 10,
+      "pillHeight": 28,
+      "pillPadding": 11,
+      "textColor": 15920634,
+      "mutedColor": 9800868,
+      "cardColor": 1381653,
+      "trackColor": 2829099,
+      "fillColor": 6668684,
+      "lowColor": 15238019,
+      "warnColor": 14269825,
+      "barStyle": 0,
+      "barPixelSize": 4,
+      "barPixelGap": 2
+    },
+    "hey": {
+      "x": 63,
+      "y": 85,
+      "width": 340,
+      "height": 136,
+      "gap": 12,
+      "padding": 16,
+      "radius": 16,
+      "senderY": 12,
+      "subjectY": 56,
+      "senderSize": 28,
+      "subjectSize": 28,
+      "lines": 2,
+      "rows": 2,
+      "textColor": 15920634,
+      "mutedColor": 9800868,
+      "cardColor": 1381653
+    },
+    "clock": {
+      "x": 33,
+      "y": 155,
+      "width": 400,
+      "dayY": 308,
+      "timeSize": 128,
+      "daySize": 22,
+      "align": 1,
+      "textColor": 15920634,
+      "mutedColor": 9800868
+    },
+    "face": {
+      "titleOffset": 0,
+      "nameY": 395,
+      "titleSize": 22,
+      "nameSize": 16,
+      "titleWidth": 340,
+      "nameWidth": 260,
+      "textColor": 15920634,
+      "mutedColor": 8287884,
+      "scale": 100
+    },
+    "roon": {
+      "artY": 70,
+      "artSize": 190,
+      "artRadius": 16,
+      "titleY": 280,
+      "titleSize": 28,
+      "artistY": 316,
+      "artistSize": 21,
+      "controlsY": 358,
+      "controlSize": 64,
+      "gap": 12,
+      "textColor": 15920634,
+      "mutedColor": 9800868,
+      "accentColor": 6668684,
+      "animateArtwork": 0,
+      "spinArtwork": 0
+    }
+  },
+  "deviceAppearance": {
+    "mode": "dark",
+    "palettes": {
+      "dark": {
+        "background": 0,
+        "foreground": 15920634,
+        "muted": 9800868,
+        "surface": 1381653,
+        "track": 2829099,
+        "accent": 6668684,
+        "success": 6668684,
+        "warning": 14270081,
+        "danger": 15238275
+      },
+      "light": {
+        "background": 16777215,
+        "foreground": 1513239,
+        "muted": 6710886,
+        "surface": 15790320,
+        "track": 14474460,
+        "accent": 6668684,
+        "success": 6668684,
+        "warning": 14270081,
+        "danger": 15238275
+      }
+    }
+  }
+}

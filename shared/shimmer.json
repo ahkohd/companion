@@ -1,0 +1,9 @@
+{
+  "period": 2.8,
+  "sweep": 1.6,
+  "band": 0.24,
+  "base": [156, 149, 173],
+  "highlight": [245, 239, 255],
+  "nameBase": [126, 118, 140],
+  "nameHighlight": [182, 174, 197]
+}

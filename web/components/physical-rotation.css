@@ -1,0 +1,12 @@
+.physical-rotation { width:218px; max-width:100%; }
+.physical-rotation-value { display:flex; align-items:center; gap:14px; }
+.physical-rotation-value>[data-slot=slider] { flex:1; min-width:80px; padding-block:12px; }
+.physical-rotation-number { display:flex; align-items:center; gap:5px; }
+.physical-rotation-number [data-slot=input] { width:65px; font-size:12px; font-variant-numeric:tabular-nums; }
+.physical-rotation-number>span { font-size:11px; color:var(--muted-foreground); }
+.physical-rotation-presets { display:flex; gap:5px; margin-top:9px; }
+.physical-rotation-presets>[data-slot=button] { flex:1; min-height:26px; font-size:11px; font-variant-numeric:tabular-nums; }
+.physical-rotation-presets>[aria-pressed=true] { background:var(--muted); border-color:var(--ring); }
+.setting-row .physical-rotation-error { margin-top:9px; max-width:218px; color:var(--destructive); font-size:11px; }
+.setting-row:has(.physical-rotation) { flex-wrap:wrap; }
+.setting-row:has(.physical-rotation)>.setting-control { margin-inline-start:auto; }

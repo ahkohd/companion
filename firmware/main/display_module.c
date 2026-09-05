@@ -1,0 +1,293 @@
+#include "display_module.h"
+#include <math.h>
+#include <string.h>
+
+static bool text(const cJSON *object, const char *key, char *out, size_t capacity)
+{
+    const cJSON *item = cJSON_GetObjectItemCaseSensitive(object, key);
+    if (item == NULL) return true;
+    if (!cJSON_IsString(item) || item->valuestring == NULL || strlen(item->valuestring) >= capacity) return false;
+    memcpy(out, item->valuestring, strlen(item->valuestring) + 1);
+    return true;
+}
+
+static bool integer(const cJSON *item, uint32_t max, uint32_t *out)
+{
+    if (!cJSON_IsNumber(item) || !isfinite(item->valuedouble) || item->valuedouble < 0 ||
+        item->valuedouble > max || floor(item->valuedouble) != item->valuedouble) return false;
+    *out = (uint32_t)item->valuedouble;
+    return true;
+}
+
+static bool optional_bool(const cJSON *object, const char *key, bool *out)
+{
+    const cJSON *value = cJSON_GetObjectItemCaseSensitive(object, key);
+    if (value != NULL && !cJSON_IsBool(value)) return false;
+    *out = cJSON_IsTrue(value);
+    return true;
+}
+
+static bool message_text(const cJSON *object, const char *key, char *out, size_t capacity)
+{
+    const cJSON *item = cJSON_GetObjectItemCaseSensitive(object, key);
+    if (!cJSON_IsString(item) || item->valuestring == NULL) return false;
+    const unsigned char *source = (const unsigned char *)item->valuestring;
+    size_t length = strlen(item->valuestring);
+    if (length >= capacity) return false;
+    for (size_t i = 0; i < length;) {
+        unsigned char first = source[i++];
+        if (first < 0x20 || first == 0x7f) return false;
+        if (first < 0x80) continue;
+        unsigned trailing;
+        uint32_t codepoint;
+        if (first >= 0xc2 && first <= 0xdf) { trailing = 1; codepoint = first & 0x1f; }
+        else if (first >= 0xe0 && first <= 0xef) { trailing = 2; codepoint = first & 0x0f; }
+        else if (first >= 0xf0 && first <= 0xf4) { trailing = 3; codepoint = first & 0x07; }
+        else return false;
+        if (i + trailing > length) return false;
+        for (unsigned j = 0; j < trailing; ++j) {
+            unsigned char next = source[i++];
+            if ((next & 0xc0) != 0x80) return false;
+            codepoint = (codepoint << 6) | (next & 0x3f);
+        }
+        if ((trailing == 2 && codepoint < 0x800) || (trailing == 3 && codepoint < 0x10000) ||
+            (codepoint >= 0xd800 && codepoint <= 0xdfff) || codepoint > 0x10ffff) return false;
+    }
+    memcpy(out, item->valuestring, length + 1);
+    return true;
+}
+
+static bool metric(const cJSON *item, module_metric_t *out)
+{
+    if (item == NULL || cJSON_IsNull(item)) return true;
+    if (!cJSON_IsObject(item) || !text(item, "provider", out->provider, sizeof(out->provider)) ||
+        !text(item, "label", out->label, sizeof(out->label)) ||
+        !text(item, "reset", out->reset, sizeof(out->reset)) ||
+        !optional_bool(item, "openable", &out->openable)) return false;
+    const cJSON *remaining = cJSON_GetObjectItemCaseSensitive(item, "remaining");
+    if (remaining == NULL || cJSON_IsNull(remaining)) return true;
+    if (!cJSON_IsNumber(remaining) || !isfinite(remaining->valuedouble) ||
+        remaining->valuedouble < 0 || remaining->valuedouble > 100) return false;
+    out->available = true;
+    out->remaining = (float)remaining->valuedouble;
+    return true;
+}
+
+static bool clock_time(const char *value)
+{
+    size_t length = strlen(value);
+    bool has_period = length == 6 || length == 7;
+    if (!has_period && length != 4 && length != 5) return false;
+    size_t colon = has_period ? length - 5 : length - 3;
+    if (value[colon] != ':' || value[colon + 1] < '0' || value[colon + 1] > '5' ||
+        value[colon + 2] < '0' || value[colon + 2] > '9') return false;
+    unsigned hour = 0;
+    for (size_t i = 0; i < colon; ++i) {
+        if (value[i] < '0' || value[i] > '9') return false;
+        hour = hour * 10 + (unsigned)(value[i] - '0');
+    }
+    if (!has_period) return hour <= 23 && (colon == 2 || hour >= 1);
+    return value[0] != '0' && hour >= 1 && hour <= 12 &&
+        (value[length - 2] == 'a' || value[length - 2] == 'p') && value[length - 1] == 'm';
+}
+
+static bool clock_fields(const cJSON *dashboard, module_snapshot_t *out)
+{
+    const cJSON *blink = cJSON_GetObjectItemCaseSensitive(dashboard, "blinkSeparator");
+    if (blink != NULL && !cJSON_IsBool(blink)) return false;
+    out->blink_separator = cJSON_IsTrue(blink);
+    const cJSON *time = cJSON_GetObjectItemCaseSensitive(dashboard, "time");
+    const cJSON *weekday = cJSON_GetObjectItemCaseSensitive(dashboard, "weekday");
+    if (out->status == MODULE_READY && (time == NULL || weekday == NULL)) return false;
+    if (!text(dashboard, "time", out->time, sizeof(out->time)) ||
+        !text(dashboard, "weekday", out->weekday, sizeof(out->weekday))) return false;
+    if (time != NULL && !clock_time(out->time)) return false;
+    if (out->weekday[0] == '\0') return true;
+    static const char *days[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+    for (unsigned i = 0; i < sizeof(days) / sizeof(days[0]); ++i) {
+        if (strcmp(out->weekday, days[i]) == 0) return true;
+    }
+    return false;
+}
+
+const char *display_module_name(display_module_t kind)
+{
+    switch (kind) {
+        case DISPLAY_USAGE: return "usage";
+        case DISPLAY_HEY: return "hey";
+        case DISPLAY_CLOCK: return "clock";
+        case DISPLAY_ROON: return "roon";
+        default: return "face";
+    }
+}
+
+static bool parse_design(const cJSON *root, module_snapshot_t *out)
+{
+    module_design_default(out->kind, &out->design);
+    const cJSON *values = cJSON_GetObjectItemCaseSensitive(root, "design");
+    if (values == NULL) return true;
+    unsigned length = module_design_length(out->kind);
+    if (!cJSON_IsArray(values)) return false;
+    unsigned received = (unsigned)cJSON_GetArraySize(values);
+    // Older designs retain defaults for appended scale, progress styles or artwork motion.
+    if (received != length && !(out->kind == DISPLAY_FACE && received == 8) &&
+        !(out->kind == DISPLAY_USAGE && received == 25) &&
+        !(out->kind == DISPLAY_ROON && received == 13)) return false;
+    length = received;
+    for (unsigned index = 0; index < length; ++index) {
+        const cJSON *field = cJSON_GetArrayItem(values, (int)index);
+        if (!cJSON_IsNumber(field) || !isfinite(field->valuedouble) ||
+            field->valuedouble < INT32_MIN || field->valuedouble > INT32_MAX) return false;
+        int32_t value = (int32_t)field->valuedouble;
+        if (value != field->valuedouble || !module_design_valid(out->kind, index, value)) return false;
+        out->design.values[index] = value;
+    }
+    out->has_design = true;
+    return true;
+}
+
+bool display_module_parse(const cJSON *root, module_snapshot_t *out)
+{
+    memset(out, 0, sizeof(*out));
+    out->palette = (device_palette_t){0x000000, 0xf2edfa, 0x958ca4, 0x151515, 0x2b2b2b, 0x65c18c, 0x65c18c, 0xd9be81, 0xe88483};
+    const cJSON *theme = cJSON_GetObjectItemCaseSensitive(root, "theme");
+    if (theme) {
+        if (!cJSON_IsString(theme) || !theme->valuestring) return false;
+        if (!strcmp(theme->valuestring, "light")) out->light_theme = true;
+        else if (strcmp(theme->valuestring, "dark")) return false;
+    }
+    if (out->light_theme) out->palette = (device_palette_t){0xffffff,0x171717,0x666666,0xf0f0f0,0xdcdcdc,0x65c18c,0x65c18c,0xd9be81,0xe88483};
+    const cJSON *palette = cJSON_GetObjectItemCaseSensitive(root, "palette");
+    if (palette) {
+        if (!cJSON_IsObject(palette)) return false;
+        out->has_palette = true;
+        const char *keys[] = {"background", "foreground", "muted", "surface", "track", "accent", "success", "warning", "danger"};
+        uint32_t *fields[] = {&out->palette.background, &out->palette.foreground, &out->palette.muted, &out->palette.surface,
+            &out->palette.track, &out->palette.accent, &out->palette.success, &out->palette.warning, &out->palette.danger};
+        for (unsigned i = 0; i < 9; ++i) {
+            const cJSON *value = cJSON_GetObjectItemCaseSensitive(palette, keys[i]);
+            if (!integer(value, 0xffffff, fields[i])) return false;
+        }
+    }
+    out->count = 1;
+    out->page_count = 1;
+    out->status = MODULE_UNAVAILABLE;
+    const cJSON *kind = cJSON_GetObjectItemCaseSensitive(root, "module");
+    if (kind != NULL) {
+        if (!cJSON_IsString(kind) || kind->valuestring == NULL) return false;
+        if (strcmp(kind->valuestring, "face") == 0) out->kind = DISPLAY_FACE;
+        else if (strcmp(kind->valuestring, "usage") == 0) out->kind = DISPLAY_USAGE;
+        else if (strcmp(kind->valuestring, "hey") == 0) out->kind = DISPLAY_HEY;
+        else if (strcmp(kind->valuestring, "clock") == 0) out->kind = DISPLAY_CLOCK;
+        else if (strcmp(kind->valuestring, "roon") == 0) out->kind = DISPLAY_ROON;
+        else return false;
+    }
+    if (!parse_design(root, out)) return false;
+    const cJSON *index = cJSON_GetObjectItemCaseSensitive(root, "moduleIndex");
+    const cJSON *count = cJSON_GetObjectItemCaseSensitive(root, "moduleCount");
+    if (index != NULL || count != NULL) {
+        uint32_t parsed_index, parsed_count;
+        if (!integer(index, MODULE_LIMIT - 1, &parsed_index) || !integer(count, MODULE_LIMIT, &parsed_count) ||
+            parsed_count == 0 || parsed_index >= parsed_count) return false;
+        out->index = (uint8_t)parsed_index;
+        out->count = (uint8_t)parsed_count;
+    }
+    const cJSON *navigation = cJSON_GetObjectItemCaseSensitive(root, "showModuleNavigation");
+    if (navigation != NULL && !cJSON_IsBool(navigation)) return false;
+    out->show_navigation = cJSON_IsTrue(navigation);
+    const cJSON *backgrounds = cJSON_GetObjectItemCaseSensitive(root, "showCardBackgrounds");
+    if (backgrounds != NULL && !cJSON_IsBool(backgrounds)) return false;
+    out->show_card_backgrounds = cJSON_IsTrue(backgrounds);
+    const cJSON *dashboard = cJSON_GetObjectItemCaseSensitive(root, "dashboard");
+    if (dashboard == NULL) return true;
+    if (!cJSON_IsObject(dashboard)) return false;
+    const cJSON *open_token = cJSON_GetObjectItemCaseSensitive(dashboard, "openToken");
+    if (open_token != NULL) {
+        if (!text(dashboard, "openToken", out->open_token, sizeof(out->open_token)) || strlen(out->open_token) != 40) return false;
+        for (unsigned i = 0; i < 40; ++i)
+            if (!((out->open_token[i] >= '0' && out->open_token[i] <= '9') || (out->open_token[i] >= 'a' && out->open_token[i] <= 'f'))) return false;
+    }
+    const cJSON *refreshing = cJSON_GetObjectItemCaseSensitive(dashboard, "refreshing");
+    if (refreshing != NULL && !cJSON_IsBool(refreshing)) return false;
+    out->refreshing = cJSON_IsTrue(refreshing);
+    const cJSON *page_index = cJSON_GetObjectItemCaseSensitive(dashboard, "pageIndex");
+    const cJSON *page_count = cJSON_GetObjectItemCaseSensitive(dashboard, "pageCount");
+    if (page_index != NULL || page_count != NULL) {
+        uint32_t parsed_index, parsed_count;
+        if (!integer(page_index, 255, &parsed_index) || !integer(page_count, 256, &parsed_count) ||
+            parsed_count == 0 || parsed_index >= parsed_count) return false;
+        out->page_index = (uint16_t)parsed_index;
+        out->page_count = (uint16_t)parsed_count;
+    }
+    const cJSON *status = cJSON_GetObjectItemCaseSensitive(dashboard, "status");
+    if (!cJSON_IsString(status) || status->valuestring == NULL) return false;
+    static const char *statuses[] = {"ready", "loading", "unavailable", "auth", "error"};
+    bool found = false;
+    for (unsigned i = 0; i < sizeof(statuses) / sizeof(statuses[0]); ++i) {
+        if (strcmp(statuses[i], status->valuestring) == 0) {
+            out->status = (module_status_t)i;
+            found = true;
+            break;
+        }
+    }
+    if (!found || !text(dashboard, "title", out->title, sizeof(out->title)) ||
+        !text(dashboard, "detail", out->detail, sizeof(out->detail)) ||
+        !metric(cJSON_GetObjectItemCaseSensitive(dashboard, "primary"), &out->primary) ||
+        !metric(cJSON_GetObjectItemCaseSensitive(dashboard, "secondary"), &out->secondary)) return false;
+    if (out->kind == DISPLAY_CLOCK && !clock_fields(dashboard, out)) return false;
+    if (out->kind == DISPLAY_ROON) {
+        const cJSON *expanded = cJSON_GetObjectItemCaseSensitive(dashboard, "expanded");
+        if (expanded != NULL && !cJSON_IsBool(expanded)) return false;
+        out->expanded = cJSON_IsTrue(expanded);
+    }
+    if (out->kind == DISPLAY_ROON && out->status == MODULE_READY) {
+        if (!message_text(dashboard, "track", out->track, sizeof(out->track)) ||
+            !message_text(dashboard, "artist", out->artist, sizeof(out->artist)) ||
+            !message_text(dashboard, "artId", out->art_id, sizeof(out->art_id))) return false;
+        if (out->art_id[0]) {
+            if (strlen(out->art_id) != 40) return false;
+            for (unsigned i = 0; i < 40; ++i)
+                if (!((out->art_id[i] >= '0' && out->art_id[i] <= '9') || (out->art_id[i] >= 'a' && out->art_id[i] <= 'f'))) return false;
+        }
+        const cJSON *playing = cJSON_GetObjectItemCaseSensitive(dashboard, "playing");
+        const cJSON *previous = cJSON_GetObjectItemCaseSensitive(dashboard, "canPrevious");
+        const cJSON *next = cJSON_GetObjectItemCaseSensitive(dashboard, "canNext");
+        if (!cJSON_IsBool(playing) || !cJSON_IsBool(previous) || !cJSON_IsBool(next)) return false;
+        out->playing = cJSON_IsTrue(playing); out->can_previous = cJSON_IsTrue(previous); out->can_next = cJSON_IsTrue(next);
+    }
+    const cJSON *more = cJSON_GetObjectItemCaseSensitive(dashboard, "countMore");
+    if (more != NULL && !cJSON_IsBool(more)) return false;
+    out->count_more = cJSON_IsTrue(more);
+    const cJSON *total = cJSON_GetObjectItemCaseSensitive(dashboard, "count");
+    if (total != NULL && !cJSON_IsNull(total)) {
+        if (!integer(total, 999999, &out->total)) return false;
+        out->has_count = true;
+    }
+    const cJSON *items = cJSON_GetObjectItemCaseSensitive(dashboard, "items");
+    if (items != NULL) {
+        if (!cJSON_IsArray(items) || cJSON_GetArraySize(items) > MODULE_MESSAGE_LIMIT) return false;
+        const cJSON *item;
+        cJSON_ArrayForEach(item, items) {
+            module_message_t *parsed = &out->messages[out->message_count];
+            if (!cJSON_IsObject(item) ||
+                !message_text(item, "sender", parsed->sender, sizeof(parsed->sender)) ||
+                !message_text(item, "subject", parsed->subject, sizeof(parsed->subject)) ||
+                !optional_bool(item, "openable", &parsed->openable)) return false;
+            out->message_count++;
+        }
+    }
+    const cJSON *boxes = cJSON_GetObjectItemCaseSensitive(dashboard, "boxes");
+    if (boxes == NULL) return true;
+    if (!cJSON_IsArray(boxes) || cJSON_GetArraySize(boxes) > MODULE_BOX_LIMIT) return false;
+    const cJSON *box;
+    cJSON_ArrayForEach(box, boxes) {
+        module_box_t *parsed = &out->boxes[out->box_count++];
+        if (!cJSON_IsObject(box) || !text(box, "label", parsed->label, sizeof(parsed->label))) return false;
+        const cJSON *value = cJSON_GetObjectItemCaseSensitive(box, "count");
+        if (value != NULL && !cJSON_IsNull(value)) {
+            if (!integer(value, 999999, &parsed->count)) return false;
+            parsed->available = true;
+        }
+    }
+    return true;
+}
