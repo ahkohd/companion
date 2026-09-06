@@ -1,3 +1,4 @@
+import { SerialConnection } from './serial-connection.mjs';
 import { SystemAppearance } from './system-appearance.mjs';
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -34,7 +35,7 @@ async function syncArtwork() {
 let listening = false, closing = false;
 let mutations = Promise.resolve();
 const mutate = operation => {
-  const pending = mutations.then(operation); mutations = pending.catch(() => {}); return pending;
+  const pending = mutations.then(() => { if (closing) throw new Error('The bridge is shutting down.'); return operation(); }); mutations = pending.catch(() => {}); return pending;
 };
 const displaySettings = new DisplaySettings(store, { filePath: process.env.DISPLAY_SETTINGS_PATH || undefined });
 // The legacy display file supplies the spacing only when no studio setting overrides it.
@@ -72,10 +73,11 @@ device = new DeviceLink(store, {
     return roon.control(action);
   }),
 });
+const connection = new SerialConnection(store, { link: device, filePath: path.join(path.dirname(studio.filePath), 'device-connection.json'), port: process.env.ESP_SERIAL_PORT || '' });
 const streams = new Set();
 const send = (res, code, data) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2' };
-const writeRoutes = ['/api/select', '/api/expression', '/api/pointer', '/api/display', '/api/settings', '/api/module', '/api/modules/refresh', '/api/usage/page', '/api/hey/page', '/api/roon/control', '/api/roon/view', '/api/open-card'];
+const writeRoutes = ['/api/select', '/api/expression', '/api/pointer', '/api/display', '/api/settings', '/api/module', '/api/modules/refresh', '/api/usage/page', '/api/hey/page', '/api/roon/control', '/api/roon/view', '/api/open-card', '/api/device/connection', '/api/device/refresh', '/api/device/reconnect'];
 const server = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
@@ -112,7 +114,10 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, store.snapshot());
       }
       const snapshot = await mutate(async () => {
-        if (url.pathname === '/api/settings') await studio.save(request);
+        if (url.pathname === '/api/device/connection') await connection.configure(request);
+        else if (url.pathname === '/api/device/refresh') await connection.refresh();
+        else if (url.pathname === '/api/device/reconnect') await connection.reconnect();
+        else if (url.pathname === '/api/settings') await studio.save(request);
         else if (url.pathname === '/api/open-card') await openCard(store, request);
         else if (url.pathname === '/api/roon/view') store.setRoonExpanded(request.expanded);
         else if (url.pathname === '/api/roon/control') {
@@ -160,8 +165,8 @@ const clockTick = setInterval(() => { store.tickClock(); store.tickWorkingSessio
 server.listen(port, '127.0.0.1', () => {
   listening = true; port = server.address().port; console.log(`Companion Studio: http://127.0.0.1:${port}`);
   if (studio.value.modules.face.enabled) herdr.start();
-  device.start(); void sources.start(); void roon.start();
+  void connection.start().catch(error => store.setDevice({ status: 'disconnected', error: error.message })); void sources.start(); void roon.start();
 });
 server.on('error', error => { console.error(error.message); shutdown(); process.exitCode = 1; });
-function shutdown() { if (closing) return; closing = true; listening = false; clearInterval(keepAlive); clearInterval(clockTick); systemAppearance.stop(); sources.stop(); roon.stop(); pointer.stop(); herdr.stop(); device.stop(); for (const res of streams) res.end(); server.close(); }
+function shutdown() { if (closing) return; closing = true; listening = false; clearInterval(keepAlive); clearInterval(clockTick); systemAppearance.stop(); sources.stop(); roon.stop(); pointer.stop(); herdr.stop(); void connection.stop(); for (const res of streams) res.end(); server.close(); }
 process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);

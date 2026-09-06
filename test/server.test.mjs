@@ -50,6 +50,22 @@ test('HTTP and SSE serve real state, restrict writes and shut down cleanly', { t
   assert.equal((await request('{"id":"missing"}')).status, 400);
   assert.equal((await request('null')).status, 400);
   assert.equal((await request('x'.repeat(2048))).status, 413);
+  const usb = (route, value, headers = {}) => fetch(base + '/api/device/' + route, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(value)
+  });
+  const disconnected = await usb('connection', { mode: 'off' });
+  assert.equal(disconnected.status, 200);
+  assert.equal((await disconnected.json()).device.connection.mode, 'off');
+  const ports = await usb('refresh', {});
+  assert.equal(ports.status, 200);
+  const usbState = (await ports.json()).device;
+  assert.equal(usbState.status, 'disabled');
+  assert.ok(Array.isArray(usbState.connection.ports));
+  assert.equal((await usb('connection', { mode: 'manual', path: '/not-a-serial-device' })).status, 400);
+  assert.equal((await usb('connection', { mode: 'invalid' })).status, 400);
+  assert.equal((await usb('connection', { mode: 'auto' }, { Origin: 'https://example.com' })).status, 403);
+  assert.equal((await usb('reconnect', {}, { Origin: 'https://example.com' })).status, 403);
+  assert.equal(JSON.parse(await readFile(path.join(directory, 'device-connection.json'), 'utf8')).mode, 'off');
   const spacing = (textGap, headers = {}) => fetch(base + '/api/display', {
     method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify({ textGap })
   });

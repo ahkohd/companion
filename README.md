@@ -39,7 +39,7 @@ pnpm start
 
 Open [Companion Studio on your computer](http://127.0.0.1:4317).
 
-Leave `ESP_SERIAL_PORT` empty in `.env` to use the browser without hardware. Set it after flashing a compatible board.
+Leave `ESP_SERIAL_PORT` empty in `.env` to start in browser-only mode. After flashing, choose Automatic or a serial port on the Device page.
 
 The app reads data through your local integrations. Follow the [integration setup guide](docs/integrations.md) to connect them.
 
@@ -98,7 +98,7 @@ pnpm firmware:build
 
 Setup downloads the pinned ESP-IDF toolchain into `.tools`. The build prints a flash command. See the [firmware build and flash instructions](firmware/README.md) for the complete steps.
 
-Stop the bridge before flashing or opening the serial port with another tool. Set `ESP_SERIAL_PORT` in `.env` after flashing, then run `pnpm start`.
+Stop the bridge before flashing or opening the serial port with another tool. After flashing, run `pnpm start` and select a connection on the Device page.
 
 To keep a copy of the original firmware, install esptool using `requirements-device.txt`. Replace the port below with your board's port:
 
@@ -116,6 +116,20 @@ python -m esptool --chip esp32s3 --port "$ESP_PORT" \
 ```
 
 USB carries power and data. Firmware updates use USB; there is no over-the-air update feature.
+
+## Connect a device
+
+On the Device page, choose a connection mode:
+
+- automatic finds a compatible Espressif USB device and remembers its serial number
+- manual lets you choose an available serial port
+- browser only disconnects the hardware without stopping the app
+
+A remembered device can reconnect after moving to another USB port. If several compatible devices are found, choose one manually first.
+
+Refresh scans the available ports. Reconnect closes and reopens the selected connection. The bridge waits for Companion Studio firmware before sending display data.
+
+Connection choices are saved separately in `.cache/device-connection.json`. They take precedence over `ESP_SERIAL_PORT`, which supplies the initial choice when no saved connection exists.
 
 ## Settings and data
 

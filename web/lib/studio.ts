@@ -8,6 +8,8 @@ export type DeviceTheme = 'dark' | 'light'
 export type DevicePalette = Record<'background'|'foreground'|'muted'|'surface'|'track'|'accent'|'success'|'warning'|'danger',number>
 export interface DeviceAppearanceSettings {mode:DeviceTheme|'system';palettes:Record<DeviceTheme,DevicePalette>}
 export interface OpenCardRequest { module: 'hey' | 'usage'; index: number; token: string }
+export interface SerialPortChoice {path:string;manufacturer?:string|null;serialNumber?:string|null;vendorId?:string|null;productId?:string|null;compatible:boolean}
+export interface SerialConnectionState {mode:'auto'|'manual'|'off';path:string|null;serialNumber:string|null;ports:SerialPortChoice[];scanning:boolean;error:string|null}
 export type Status = 'working' | 'blocked' | 'done' | 'idle' | 'unknown' | 'disconnected'
 export type Settings = typeof defaults
 export interface UsageWindow { id: string; label: string; usedPercent: number; resetAt: number | null }
@@ -24,7 +26,7 @@ export interface StudioSnapshot {
   agents: {id: string; name: string; kind: string; project: string; state: string}[];
   display: {state: string; label: string; name: string; nameShimmer?: boolean; animation?: string | null; expression?: string; counts?: Record<string,number>; dashboard?: {status: string; refreshing?: boolean; title: string; detail: string; track?:string;artist?:string;artId?:string;expanded?:boolean;playing?:boolean;canPrevious?:boolean;canNext?:boolean; time?: string; weekday?: string; blinkSeparator?: boolean; pageIndex?: number; pageCount?: number; openToken?: string; primary?: {provider?: string; label: string; remaining: number | null; reset: string; openable?: boolean}; secondary?: {provider?: string; label: string; remaining: number | null; reset: string; openable?: boolean}; items?: (Pick<HeyItem, 'sender' | 'subject'> & {openable?: boolean})[]}};
   changedAt: number; animationMs: number; ageMs: number; updatedAt: number | null; layout: {textGap: number};
-  device: {fontError?: boolean; status: string; port: string | null; error: string | null; lastAck?: number; renderedModule?: string};
+  device: {fontError?: boolean; status: string; port: string | null; error: string | null; lastAck?: number; renderedModule?: string;connection?:SerialConnectionState};
   pointer: {supported: boolean; enabled: boolean; intervalMs: number; status: string; error: string | null; x: number; y: number};
   modules: {usage: UsageSource; hey: HeySource; roon: RoonSource};
 }

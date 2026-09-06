@@ -99,3 +99,11 @@ Device > Device appearance controls the companion independently of Studio prefer
 System follows the connected host's appearance, including when the browser is closed. The bridge polls macOS appearance, Windows AppsUseLightTheme or GNOME color-scheme every three seconds. Failed or unavailable OS queries retain the last reading (Dark until a reading succeeds). Dashboard appearance never controls the device.
 
 Frames include resolved `theme` and RGB24 `palette`; module design colors are resolved from those tokens. ACKs report rendered theme and panel transfer diagnostics. Rotation work is tracked with `rotation_us` and `rotation_pixels` to separate screen processing from scene preparation.
+
+### USB connection selection
+
+Device > USB connection provides Automatic, Choose a port and Browser only modes. Refresh ports updates the list; Reconnect reopens the current connection.
+
+Automatic selection uses the Espressif USB identifier, then remembers the chosen device's serial number and USB identity. Moving that device to another socket updates its path. Multiple candidates require a manual choice. A remembered device being absent does not select a different board automatically.
+
+Only listed ports can be selected. The bridge waits for the expected firmware handshake before sending state. A saved connection in `.cache/device-connection.json` takes precedence over the initial `.env` port. Browser only prevents automatic connection while preserving your selection.

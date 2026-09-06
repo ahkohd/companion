@@ -15,15 +15,15 @@ function crc32(bytes) {
 }
 
 export class DeviceLink {
-  constructor(store, { port = process.env.ESP_SERIAL_PORT || '', baudRate = 115200, onModule = null, onUsagePage = null, onHeyPage = null, onRoonControl = null, onRoonView = null, onOpenCard = null } = {}) {
-    this.store = store; this.path = port; this.baudRate = baudRate; this.buffer = ''; this.stopped = true;
+  constructor(store, { port = process.env.ESP_SERIAL_PORT || '', baudRate = 115200, onModule = null, onUsagePage = null, onHeyPage = null, onRoonControl = null, onRoonView = null, onOpenCard = null, Port = SerialPort } = {}) {
+    this.Port = Port; this.store = store; this.path = port; this.baudRate = baudRate; this.buffer = ''; this.stopped = true;
     this.onModule = onModule; this.onUsagePage = onUsagePage; this.onHeyPage = onHeyPage;
     this.onOpenCard = onOpenCard; this.onRoonControl = onRoonControl; this.onRoonView = onRoonView; this.artwork = null; this.artCounter = randomInt(1, 0x100000000);
     this.onChange = () => { if (this.lastSeq !== this.store.seq) this.send(); };
   }
   start() {
     if (!this.path || !this.stopped) return;
-    this.stopped = false; this.store.on('change', this.onChange); this.connect();
+    this.attempted = false; this.stopped = false; this.store.on('change', this.onChange); this.connect();
     this.heartbeat = setInterval(() => {
       if (this.ready && Date.now() - this.lastAck > 8000) {
         this.ready = false; this.store.setDevice({ status: 'unresponsive', error: 'Device stopped responding' }); this.port?.close();
@@ -36,16 +36,22 @@ export class DeviceLink {
     this.clearArtPacket(); this.artTransfer = null;
     if (!this.attempted) this.store.setDevice({ status: 'connecting', port: this.path, error: null });
     this.attempted = true;
-    const port = new SerialPort({ path: this.path, baudRate: this.baudRate, autoOpen: false }); this.port = port;
-    port.on('data', chunk => this.receive(chunk.toString('utf8')));
-    port.on('error', error => this.store.setDevice({ status: 'disconnected', error: error.message }));
+    const port = new this.Port({ path: this.path, baudRate: this.baudRate, autoOpen: false }); this.port = port;
+    const current = () => !this.stopped && this.port === port;
+    let opened;
+    port.openSettled = new Promise(resolve => { opened = resolve; });
+    port.on('data', chunk => { if (current()) this.receive(chunk.toString('utf8')); });
+    port.on('error', error => { if (current()) this.store.setDevice({ status: 'disconnected', error: error.message }); });
     port.on('close', () => {
+      if (!current()) return;
       this.ready = false;
       this.clearArtPacket(); this.artTransfer = null; this.writing = false;
       if (this.store.device.status !== 'unresponsive') this.store.setDevice({ status: 'disconnected' });
       this.reconnect();
     });
     port.open(error => {
+      opened();
+      if (!current()) return;
       if (error) { this.store.setDevice({ status: 'disconnected', error: error.message }); this.reconnect(); }
       else { this.store.setDevice({ status: 'waiting', error: null }); }
     });
@@ -237,6 +243,16 @@ export class DeviceLink {
   stop() {
     this.stopped = true; this.ready = false; this.store.off('change', this.onChange);
     this.clearArtPacket(); this.artTransfer = null;
-    clearInterval(this.heartbeat); clearTimeout(this.retry); if (this.port?.isOpen) this.port.close();
+    clearInterval(this.heartbeat); clearTimeout(this.retry);
+    const port = this.port; this.port = null; this.writing = false;
+    if (!port) return this.closing ?? Promise.resolve();
+    this.closing = (async () => {
+      await port.openSettled;
+      if (port.isOpen) await new Promise((resolve, reject) => {
+        port.close(error => error && port.isOpen ? reject(error) : resolve());
+        if (!port.isOpen && !port.closing) resolve();
+      });
+    })();
+    return this.closing;
   }
 }
