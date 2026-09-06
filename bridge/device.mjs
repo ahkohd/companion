@@ -15,9 +15,9 @@ function crc32(bytes) {
 }
 
 export class DeviceLink {
-  constructor(store, { port = process.env.ESP_SERIAL_PORT || '', baudRate = 115200, onModule = null, onUsagePage = null, onHeyPage = null, onRoonControl = null, onRoonView = null, onOpenCard = null, Port = SerialPort } = {}) {
+  constructor(store, { port = process.env.ESP_SERIAL_PORT || '', baudRate = 115200, onAttention = null, onModule = null, onUsagePage = null, onHeyPage = null, onRoonControl = null, onRoonView = null, onOpenCard = null, Port = SerialPort } = {}) {
     this.Port = Port; this.store = store; this.path = port; this.baudRate = baudRate; this.buffer = ''; this.stopped = true;
-    this.onModule = onModule; this.onUsagePage = onUsagePage; this.onHeyPage = onHeyPage;
+    this.onAttention = onAttention; this.onModule = onModule; this.onUsagePage = onUsagePage; this.onHeyPage = onHeyPage;
     this.onOpenCard = onOpenCard; this.onRoonControl = onRoonControl; this.onRoonView = onRoonView; this.artwork = null; this.artCounter = randomInt(1, 0x100000000);
     this.onChange = () => { if (this.lastSeq !== this.store.seq) this.send(); };
   }
@@ -68,6 +68,10 @@ export class DeviceLink {
       if (this.dropping) { this.dropping = false; continue; }
       let message; try { message = JSON.parse(line); } catch { continue; }
       if (!message || message.v !== 1) continue;
+      if (message.type === 'attention' && this.ready && this.onAttention) {
+        Promise.resolve().then(() => this.onAttention(message)).catch(() => {}); continue;
+      }
+      if (this.store.attention?.active && !['ready', 'ack', 'artAck'].includes(message.type)) continue;
       if (message.type === 'ready' && message.board === 'waveshare-1.75-b') {
         this.ready = true; this.lastAck = Date.now(); this.prepareArtwork();
         this.store.setDevice({ status: 'connected', error: null }); this.send();
@@ -87,6 +91,13 @@ export class DeviceLink {
               Number.isInteger(message.panel_error) && message.panel_error >= 0 &&
               Number.isInteger(message.panel_rotation) && message.panel_rotation >= 0 && message.panel_rotation <= 359) {
             Object.assign(update, { panelTransfers: message.panel_transfers, panelError: message.panel_error, panelRotation: message.panel_rotation });
+            if (message.panel_error !== 0) {
+              this.panelError = `Display transfer failed (${message.panel_error}). USB is connected, but the screen may be frozen.`;
+              update.error = this.panelError;
+            } else {
+              if (this.panelError && this.store.device.error === this.panelError) update.error = null;
+              this.panelError = null;
+            }
           }
           if (['light', 'dark'].includes(message.theme)) update.renderedTheme = message.theme;
           if (Number.isSafeInteger(message.rotation_us) && message.rotation_us >= 0) update.rotationUs = message.rotation_us;

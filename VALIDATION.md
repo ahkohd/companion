@@ -557,3 +557,39 @@ Physical benchmark with the same working-face animation at 85 degrees: previous 
 Independent device Light, Dark and System modes have nine semantic color tokens per palette. System uses the host appearance reader, not dashboard preferences; macOS is queried even without a browser. Module layout colors resolve from the palette. Neutral face pixels and canvas backgrounds theme, colored clip pixels and Roon artwork are preserved. Native fallback frames without explicit design also receive readable themed colors.
 
 Firmware flashed and both themes verified over USB in Face, Usage, HEY, Clock and Roon at 85 degrees, without font or panel errors. Browser checks saved a light background token, verified the preview, reset it, and selected System while the dashboard stayed dark. Final device reports Light at 85 degrees. Other previous configuration matches the pre-change snapshot. Review browser space closed.
+
+## Attention requests - 6 September 2026
+
+- `pnpm check`: 236 tests pass, including queue expiry and pause, decision responses, stale revisions, chains, ownership, HTTP origin checks, real CLI flows and native parser rejection. TypeScript and production build pass.
+- Browser: composed a two-button test decision, opened its details, selected Cancel and verified the clock returned with a dismissed result. Inspected the detail layout in ego-browser.
+- Independent review found and resolved a firmware race between a newly received frame and the message visible when a tap started. Responses now require the visible and current request identities to match.
+- ESP-IDF build and USB flash passed; esptool verified the written images.
+- Physical serial check: summary, details and clearing rendered at 85 degrees in both themes without panel or font errors. Invalid attention frames were rejected and normal rendering recovered.
+- Installed the `companion` CLI and validated the agent skill. Added its reference to the user's AGENTS.md. Existing device settings are retained.
+- Physical touch feel and screen appearance still need the user's confirmation. A two-screen demo is available for this purpose; test responses do not perform external actions.
+- Live demo: the bridge received open and dismiss actions for the physical demo request while the browser check performed no action calls. The result was dismissed, and the underlying module returned.
+
+## Attention gestures - 7 September 2026
+
+- Removed the device Back button and stacked actions vertically, with Approve and Decline as decision defaults.
+- `pnpm check`: all 240 tests and the production build pass.
+- Native and browser gesture tests cover delayed single taps, second presses crossing the 300 ms deadline, scrolling, long presses, stale requests and 40-pixel circular distance matching. Browser tests also cover leaving the view and losing focus.
+- Browser verification used two real pointer click sequences over Approve, 83 ms apart. The recorded outcome was dismissed with no action. Both buttons occupied separate rows and no Back control was present.
+- Updated firmware flashed and verified by esptool. Physical serial checks passed for summary, detail and clearing at 85 degrees in both themes, with invalid-frame recovery. Bridge restarted with the existing connection settings.
+
+## Attention detail spacing - 7 September 2026
+
+- Description follows the measured title height with a 12-pixel gap. The scroll viewport ends 28 pixels above the actions; one-line titles no longer reserve an empty second line.
+- Browser measurements confirmed 12 and 28 pixels. Independent review confirmed matching native font metrics, dynamic scroll range and touch bounds.
+- Eleven native and browser regression tests passed; web and firmware builds passed.
+- Flashed and verified the update. Physical serial render checks passed at 85 degrees in both themes. Restarted the bridge and sent a spacing preview.
+- Follow-up spacing adjustment: title-to-description gap increased from 12 to 18 pixels in native and browser layouts. Button gap remains 28 pixels. Both builds passed; firmware flash verified and bridge restarted.
+- Final fine adjustment: description moved down another 2 pixels, for a 20-pixel title gap. Browser and firmware builds passed.
+
+## Display freeze recovery - 7 September 2026
+
+- Captured repeated ESP_ERR_NO_MEM failures from SPI colour transfers while the panel was frozen at 85 degrees. USB alone still appeared connected.
+- Limited transfers to two 4,092-byte DMA descriptors (8,184 bytes), preserving queue depth and final-transfer callbacks. Moved 15,040 bytes of long-lived attention/render snapshots into PSRAM BSS. Configuration is tracked and reproducible.
+- Dashboard now exposes panel-transfer errors from acknowledgements and clears them after healthy acknowledgements without clearing unrelated errors.
+- Full check passed 241 tests and production build; the final DMA rounding regression and native build also passed. Independent review checked descriptor rounding, callback semantics, PSRAM map placement and ACK byte limits.
+- Flashed and verified firmware. A physical 300-update stress test used current user design settings, six animation clips, repeated detail transitions and rotations of 85, 22 and 137 degrees. All 300 frames were acknowledged over 99.2 seconds; 602 panel transfers completed with zero panel/font errors. Minimum largest DMA block was 63,488 bytes; minimum internal free memory was 110,999 bytes.

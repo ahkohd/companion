@@ -40,3 +40,5 @@ CONFIG_LV_USE_TINY_TTF=y
 CONFIG_LV_TINY_TTF_CACHE_GLYPH_CNT=32
 # LVGL 9.4's kerning-cache release targets the wrong cache; direct lookup avoids it.
 CONFIG_LV_TINY_TTF_CACHE_KERNING_CNT=0
+
+CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=y

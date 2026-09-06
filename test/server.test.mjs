@@ -110,6 +110,26 @@ test('HTTP and SSE serve real state, restrict writes and shut down cleanly', { t
   assert.equal((await (await request('{"id":"all"}')).json()).expression, null);
   const post = (endpoint, value, headers = {}) => fetch(base + endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(value) });
   const change = value => post('/api/settings', value);
+  const attentionShow = await post('/api/attention/show', { owner: 'test-cli', kind: 'decision', title: 'Approve release?', body: 'Review the changes first.' });
+  assert.equal(attentionShow.status, 200);
+  const attentionShown = await attentionShow.json(), attentionId = attentionShown.attentionResult.id;
+  assert.equal(attentionShown.attention.active.id, attentionId);
+  assert.equal(attentionShown.display.label, 'Approve release?');
+  assert.equal((await post('/api/attention/act', { id: attentionId, revision: 1, action: 'approve' })).status, 400);
+  assert.equal((await post('/api/attention/clear', { id: attentionId, owner: 'different' })).status, 400);
+  assert.equal((await post('/api/attention/show', { owner: 'test', title: 'Bad origin' }, { Origin: 'https://example.com' })).status, 403);
+  const details = await (await post('/api/attention/details', { id: attentionId, revision: 1, detail: true })).json();
+  const responded = await (await post('/api/attention/act', { id: attentionId, revision: details.attention.active.revision, action: 'approve' })).json();
+  assert.equal(responded.attention.active, null); assert.equal(responded.attention.history[0].action, 'approve');
+  assert.equal((await post('/api/attention/act', { id: attentionId, revision: details.attention.active.revision, action: 'approve' })).status, 400);
+  const dismissible = await (await post('/api/attention/show', { owner: 'test-cli', kind: 'decision', title: 'Gesture test' })).json();
+  const gestureTarget = { id: dismissible.attention.active.id, revision: dismissible.attention.active.revision };
+  assert.equal((await post('/api/attention/dismiss', gestureTarget, { Origin: 'https://example.com' })).status, 403);
+  const dismissed = await (await post('/api/attention/dismiss', gestureTarget)).json();
+  assert.equal(dismissed.attention.history[0].outcome, 'dismissed');
+  assert.equal(dismissed.attention.history[0].action, null);
+  assert.equal((await post('/api/attention/dismiss', gestureTarget)).status, 400);
+
   for (const endpoint of ['/api/settings', '/api/module', '/api/modules/refresh', '/api/usage/page', '/api/hey/page', '/api/roon/view', '/api/open-card']) {
     assert.equal((await post(endpoint, {}, { Origin: 'https://example.com' })).status, 403);
     assert.equal((await post(endpoint, null)).status, 400);

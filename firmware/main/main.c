@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include "esp_log.h"
+#include "esp_attr.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -23,8 +24,8 @@
 #include "lvgl.h"
 
 #define FRAME_MAX 2048
-#define FACE_LABEL_CAPACITY 64
-#define FACE_NAME_CAPACITY 64
+#define FACE_LABEL_CAPACITY 97
+#define FACE_NAME_CAPACITY 193
 #include "face_model.h"
 #include "face_accent.h"
 #include "face_shimmer.h"
@@ -35,6 +36,8 @@
 #include "display_module.h"
 #include "module_view.h"
 #include "module_touch.h"
+#include "attention_view.h"
+#include "attention_gesture.h"
 #include "roon_artwork.h"
 #include "screen_rotation.h"
 extern const uint8_t grok_clips_start[] asm("_binary_grok_clips_bin_start");
@@ -62,6 +65,7 @@ typedef struct {
     face_state_t expression;
     bool has_expression;
     module_snapshot_t module;
+    attention_snapshot_t attention;
     int clip;
     uint32_t seq;
     uint16_t counts[5];
@@ -88,7 +92,8 @@ typedef struct {
 
 static SemaphoreHandle_t state_mutex;
 static QueueHandle_t cycle_queue;
-typedef struct { int8_t action; module_card_target_t card; } touch_message_t;
+static attention_gesture_t attention_gesture;
+typedef struct { int8_t action; module_card_target_t card; char attention_id[37], attention_action[33]; uint32_t attention_revision; } touch_message_t;
 static roon_artwork_t roon_artwork;
 static uint32_t shown_art_revision;
 static status_snapshot_t shared_status = {
@@ -210,6 +215,7 @@ static bool parse_state_frame(const char *line, size_t length, status_snapshot_t
     }
 
     bool valid = false;
+    if (!attention_parse(root, &parsed->attention)) { cJSON_Delete(root); return false; }
     char type[8];
     char state_name[16];
     uint32_t version;
@@ -323,9 +329,20 @@ static void protocol_self_check(void)
         "\"label\":\"Ready\",\"name\":\"All agents\",\"counts\":{"
         "\"working\":0,\"blocked\":0,\"done\":2,\"idle\":1,\"unknown\":0}}";
     static const char *bad_gaps[] = {"12", "0", "8.5", "-8", "\"8\"", "true", "null"};
-    status_snapshot_t parsed = {0};
+    static EXT_RAM_BSS_ATTR status_snapshot_t parsed;
     assert(parse_state_frame(valid, sizeof(valid) - 1, &parsed));
     assert(parsed.seq == 7 && parsed.state == FACE_WORKING && parsed.counts[2] == 2);
+    cJSON *attention_test = cJSON_Parse("{\"attention\":{\"id\":\"12345678-abcd-1234-abcd-123456789012\",\"revision\":1,\"detail\":true,\"body\":\"Review this change\",\"actions\":[{\"id\":\"approve\",\"label\":\"Approve\"},{\"id\":\"cancel\",\"label\":\"Cancel\"}]}}");
+    assert(attention_test && attention_parse(attention_test, &parsed.attention));
+    assert(parsed.attention.active && parsed.attention.detail && parsed.attention.count == 2);
+    cJSON *attention_object = cJSON_GetObjectItemCaseSensitive(attention_test, "attention");
+    cJSON_ReplaceItemInObject(attention_object, "revision", cJSON_CreateNumber(-1));
+    assert(!attention_parse(attention_test, &parsed.attention));
+    cJSON_ReplaceItemInObject(attention_object, "revision", cJSON_CreateNumber(2));
+    cJSON *first_action = cJSON_GetArrayItem(cJSON_GetObjectItemCaseSensitive(attention_object, "actions"), 0);
+    cJSON_ReplaceItemInObject(first_action, "id", cJSON_CreateString("open"));
+    assert(!attention_parse(attention_test, &parsed.attention));
+    cJSON_Delete(attention_test);
     assert(!parsed.name_shimmer); // missing flag keeps existing static subtitles
     assert(parsed.text_gap == TEXT_GAP_DEFAULT); // omitted textGap uses the balanced default
     assert(!parse_state_frame(partial, sizeof(partial) - 1, &parsed));
@@ -412,6 +429,7 @@ static void accept_state(const status_snapshot_t *parsed)
     if (was_disconnected || shared_status.state != parsed->state || shared_status.preview != parsed->preview || shared_status.status_dots != parsed->status_dots || shared_status.name_shimmer != parsed->name_shimmer ||
         shared_status.text_gap != parsed->text_gap || shared_status.rotation != parsed->rotation || shared_status.clip != parsed->clip ||
         memcmp(&shared_status.module, &parsed->module, sizeof(parsed->module)) != 0 ||
+        memcmp(&shared_status.attention, &parsed->attention, sizeof(parsed->attention)) != 0 ||
         strcmp(shared_status.label, parsed->label) != 0 || strcmp(shared_status.name, parsed->name) != 0) ++shared_status.revision;
     shared_status.animation_ms = parsed->has_timing ? parsed->animation_ms : now / 1000.0;
     shared_status.state = parsed->state;
@@ -424,6 +442,7 @@ static void accept_state(const status_snapshot_t *parsed)
     shared_status.expression = parsed->expression;
     shared_status.has_expression = parsed->has_expression;
     shared_status.module = parsed->module;
+    shared_status.attention = parsed->attention;
     shared_status.has_look = parsed->has_look;
     shared_status.look_x = parsed->look_x;
     shared_status.look_y = parsed->look_y;
@@ -449,10 +468,10 @@ static void accept_state(const status_snapshot_t *parsed)
     memcpy(drawn, rendered_eyes, sizeof(drawn));
     xSemaphoreGive(state_mutex);
 
-    char ack[768];
+    char ack[1024];
     snprintf(ack, sizeof(ack), "{\"type\":\"ack\",\"v\":1,\"seq\":%" PRIu32
-        ",\"rendered_seq\":%" PRIu32 ",\"render_us\":%" PRIu32 ",\"decor_count\":%d,\"eyes\":[[%.3f,%.3f],[%.3f,%.3f]],\"clip\":%d,\"clip_frame\":%d,\"clip_hash\":%" PRIu32 ",\"shimmer_pixels\":%d,\"name_shimmer_pixels\":%d,\"text_gap\":%d,\"status_top\":%d,\"module\":\"%s\",\"page_index\":%u,\"page_count\":%u,\"refreshing\":%s,\"font_error\":%s,\"rotation\":%u,\"panel_transfers\":%u,\"panel_error\":%u,\"panel_rotation\":%u,\"rotation_us\":%u,\"rotation_pixels\":%u,\"theme\":\"%s\"}\n",
-        parsed->seq, drawn_seq, duration, decor_count, drawn[0].w, drawn[0].h, drawn[1].w, drawn[1].h, clip_id, clip_frame, clip_hash, shimmer_pixels, name_shimmer_pixels, text_gap, status_top, display_module_name(drawn_module), page_index, page_count, refreshing ? "true" : "false", font_error ? "true" : "false", rotation, screen_rotation_transfers(), screen_rotation_transfer_error(), screen_rotation_submitted_angle(), screen_rotation_render_us(), screen_rotation_render_pixels(), light_theme ? "light" : "dark");
+        ",\"rendered_seq\":%" PRIu32 ",\"render_us\":%" PRIu32 ",\"decor_count\":%d,\"eyes\":[[%.3f,%.3f],[%.3f,%.3f]],\"clip\":%d,\"clip_frame\":%d,\"clip_hash\":%" PRIu32 ",\"shimmer_pixels\":%d,\"name_shimmer_pixels\":%d,\"text_gap\":%d,\"status_top\":%d,\"module\":\"%s\",\"page_index\":%u,\"page_count\":%u,\"refreshing\":%s,\"font_error\":%s,\"rotation\":%u,\"panel_transfers\":%u,\"panel_error\":%u,\"panel_rotation\":%u,\"rotation_us\":%u,\"rotation_pixels\":%u,\"theme\":\"%s\",\"dma_largest\":%u,\"internal_free\":%u}\n",
+        parsed->seq, drawn_seq, duration, decor_count, drawn[0].w, drawn[0].h, drawn[1].w, drawn[1].h, clip_id, clip_frame, clip_hash, shimmer_pixels, name_shimmer_pixels, text_gap, status_top, display_module_name(drawn_module), page_index, page_count, refreshing ? "true" : "false", font_error ? "true" : "false", rotation, screen_rotation_transfers(), screen_rotation_transfer_error(), screen_rotation_submitted_angle(), screen_rotation_render_us(), screen_rotation_render_pixels(), light_theme ? "light" : "dark", (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL), (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
     serial_write_line(ack);
 }
 
@@ -511,6 +530,12 @@ static void serial_task(void *argument)
         while (xQueueReceive(cycle_queue, &message, 0) == pdTRUE) {
             int8_t event = message.action;
             if (event == 0) serial_write_line(CYCLE_JSON);
+            else if (event == 10) {
+                char line[192];
+                snprintf(line, sizeof(line), "{\"type\":\"attention\",\"v\":1,\"id\":\"%s\",\"revision\":%" PRIu32 ",\"action\":\"%s\"}\n",
+                    message.attention_id, message.attention_revision, message.attention_action);
+                serial_write_line(line);
+            }
             else if (event == 9) {
                 char line[144];
                 snprintf(line, sizeof(line), "{\"type\":\"open-card\",\"v\":1,\"module\":\"%s\",\"index\":%u,\"token\":\"%s\"}\n",
@@ -555,13 +580,11 @@ static void serial_task(void *argument)
     }
 }
 
-static status_snapshot_t status_copy(void)
+static void status_copy(status_snapshot_t *copy)
 {
-    status_snapshot_t copy;
     xSemaphoreTake(state_mutex, portMAX_DELAY);
-    copy = shared_status;
+    *copy = shared_status;
     xSemaphoreGive(state_mutex);
-    return copy;
 }
 
 // Rasterize the status text into the offscreen mask synchronously (finish_layer waits for the draw units).
@@ -584,11 +607,20 @@ static void render_text_mask(lv_obj_t *canvas, uint16_t *mask, int buffer_width,
     lv_canvas_finish_layer(canvas, &layer);
 }
 
+static void queue_attention(const attention_snapshot_t *attention, const char *action)
+{
+    touch_message_t queued = { .action = 10, .attention_revision = attention->revision };
+    snprintf(queued.attention_id, sizeof(queued.attention_id), "%s", attention->id);
+    snprintf(queued.attention_action, sizeof(queued.attention_action), "%s", action);
+    xQueueSend(cycle_queue, &queued, 0);
+}
+
 static void refresh_face(lv_timer_t *timer)
 {
     (void)timer;
     int64_t now = esp_timer_get_time();
-    status_snapshot_t status = status_copy();
+    static EXT_RAM_BSS_ATTR status_snapshot_t status;
+    status_copy(&status);
     if (screen_rotation_apply(status.rotation)) {
         ++display_rotation_revision;
         lv_indev_t *input = bsp_display_get_input_dev();
@@ -605,6 +637,13 @@ static void refresh_face(lv_timer_t *timer)
     }
     xSemaphoreGive(state_mutex);
     bool disconnected = !status.ever_received || now - status.last_valid_us >= DISCONNECT_US;
+    const attention_snapshot_t *shown_attention = attention_view_snapshot();
+    if (disconnected || !status.attention.active || strcmp(shown_attention->id, status.attention.id) ||
+        shown_attention->revision != status.attention.revision || shown_attention->detail != status.attention.detail)
+        attention_gesture_cancel(&attention_gesture);
+    const char *attention_action = attention_gesture_poll(&attention_gesture, &status.attention, display_rotation_revision, now);
+    if (attention_action) queue_attention(&status.attention, attention_action);
+
     face_state_t state = disconnected ? FACE_DISCONNECTED : status.state;
     int64_t state_elapsed = disconnected ? 0 : now - status.state_since_us;
     face_state_t pose = disconnected ? FACE_DISCONNECTED : status.has_expression ? status.expression : state;
@@ -630,6 +669,8 @@ static void refresh_face(lv_timer_t *timer)
         shown_state = state;
         lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(status.module.palette.background), 0);
         module_view_update(&status.module, disconnected);
+        if (disconnected) status.attention.active = false;
+        attention_view_update(&status.attention, status.label, &status.module.palette);
         if (face_visible) {
             lv_obj_remove_flag(face_canvas, LV_OBJ_FLAG_HIDDEN);
             lv_obj_remove_flag(status_label, LV_OBJ_FLAG_HIDDEN);
@@ -771,6 +812,8 @@ static void touch_event(lv_event_t *event)
     static module_touch_t touch;
     static module_card_target_t pressed_card;
     static uint32_t pressed_rotation_revision;
+    static EXT_RAM_BSS_ATTR attention_snapshot_t pressed_attention;
+    static int pressed_x, pressed_y;
     lv_indev_t *input = lv_indev_active();
     if (input == NULL) return;
     lv_point_t point;
@@ -782,16 +825,40 @@ static void touch_event(lv_event_t *event)
     if (code == LV_EVENT_PRESSED) {
         module_touch_begin(&touch, point.x, point.y, esp_timer_get_time());
         pressed_rotation_revision = display_rotation_revision;
+        pressed_attention = *attention_view_snapshot();
+        attention_gesture_press(&attention_gesture, esp_timer_get_time());
+        pressed_x = point.x; pressed_y = point.y;
         pressed_card = (module_card_target_t){0};
         module_view_card_at(point.x, point.y, &pressed_card);
     }
     else if (code == LV_EVENT_PRESSING) module_touch_move(&touch, point.x, point.y);
-    else if (code == LV_EVENT_PRESS_LOST) touch.active = false;
+    else if (code == LV_EVENT_PRESS_LOST) { touch.active = false; attention_gesture_cancel(&attention_gesture); }
     else if (code == LV_EVENT_RELEASED) {
-        if (pressed_rotation_revision != display_rotation_revision) { touch.active = false; return; }
+        if (pressed_rotation_revision != display_rotation_revision) { touch.active = false; attention_gesture_cancel(&attention_gesture); return; }
         module_touch_action_t action = module_touch_end(&touch, point.x, point.y, esp_timer_get_time());
-        status_snapshot_t status = status_copy();
+        static EXT_RAM_BSS_ATTR status_snapshot_t status;
+        status_copy(&status);
         int8_t message;
+        if (pressed_attention.active || status.attention.active) {
+            if (!status.attention.active || !status.ever_received || esp_timer_get_time() - status.last_valid_us >= DISCONNECT_US ||
+                strcmp(pressed_attention.id, status.attention.id) || pressed_attention.revision != status.attention.revision ||
+                pressed_attention.detail != status.attention.detail) { attention_gesture_cancel(&attention_gesture); return; }
+            if (status.attention.detail && abs(point.y - pressed_y) > 20 && attention_view_body_hit(pressed_x, pressed_y)) {
+                attention_gesture_cancel(&attention_gesture);
+                attention_view_scroll(pressed_y - point.y);
+                return;
+            }
+            const attention_snapshot_t *shown_attention = attention_view_snapshot();
+            if (strcmp(shown_attention->id, status.attention.id) || shown_attention->revision != status.attention.revision ||
+                shown_attention->detail != status.attention.detail) { attention_gesture_cancel(&attention_gesture); return; }
+            if (action != MODULE_TOUCH_TAP) { attention_gesture_cancel(&attention_gesture); return; }
+            const char *hit = attention_view_action(point.x, point.y);
+            const char *start = attention_view_action(pressed_x, pressed_y);
+            if (!hit || !start || strcmp(hit, start)) hit = NULL;
+            if (attention_gesture_tap(&attention_gesture, shown_attention, display_rotation_revision,
+                point.x, point.y, esp_timer_get_time(), hit)) queue_attention(shown_attention, "__dismiss");
+            return;
+        }
         if (action == MODULE_TOUCH_TAP && pressed_card.token[0]) {
             module_card_target_t released;
             if (!status.ever_received || esp_timer_get_time() - status.last_valid_us >= DISCONNECT_US ||
@@ -870,6 +937,7 @@ static void make_ui(void)
     lv_obj_remove_flag(name_shimmer_canvas, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
 
     module_view_create(screen);
+    attention_view_create(screen);
 
     status_label = lv_label_create(screen);
     lv_obj_set_size(status_label, 340, lv_font_geist_22.line_height);
@@ -935,6 +1003,6 @@ void app_main(void)
     ESP_LOGI("boot", "UI ready");
     bsp_display_unlock();
 
-    BaseType_t created = xTaskCreate(serial_task, "usb-json", 10240, NULL, 6, NULL);
+    BaseType_t created = xTaskCreate(serial_task, "usb-json", 16384, NULL, 6, NULL);
     assert(created == pdPASS);
 }

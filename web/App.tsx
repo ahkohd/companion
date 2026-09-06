@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type ReactNode } from 'react'
-import { Activity, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, Check, ChevronDown, ChevronRight, CircleHelp, Clock, Cpu, Download, Eye, LayoutDashboard, Mail, Monitor, Music2, Moon, Sun, MousePointer2, Play, Plus, Radio, RefreshCw, RotateCcw, Search, Settings2, Shapes, SlidersHorizontal, Smile, Sparkles, Unplug, Wifi, X, type LucideIcon } from 'lucide-react'
+import { Activity, Bell, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, Check, ChevronDown, ChevronRight, CircleHelp, Clock, Cpu, Download, Eye, LayoutDashboard, Mail, Monitor, Music2, Moon, Sun, MousePointer2, Play, Plus, Radio, RefreshCw, RotateCcw, Search, Settings2, Shapes, SlidersHorizontal, Smile, Sparkles, Unplug, Wifi, X, type LucideIcon } from 'lucide-react'
 import { Toaster, toast } from 'sonner'
 import { Button } from './components/ui/button'
 import { Badge } from './components/ui/badge'
@@ -11,6 +11,7 @@ import PhysicalRotation from './components/PhysicalRotation'
 import SerialConnection from './components/SerialConnection'
 import DeviceAppearance from './components/DeviceAppearance'
 import Designer from './components/Designer'
+import Attention from './components/Attention'
 import RoonSettings from './components/RoonSettings'
 import Face from './components/face/Face'
 import { animationName, animations, boxes, moduleNames, relativeTime, resetTime, statusDescriptions, statusNames, useStudio, type ModuleId, type Source, type Status, type StudioSnapshot } from './lib/studio'
@@ -19,10 +20,11 @@ const navigation: {id:Page;label:string;icon:LucideIcon;description:string}[] = 
   {id:'overview',label:'Overview',icon:LayoutDashboard,description:'A little presence for everything you are working on.'},
   {id:'animations',label:'Animations',icon:Smile,description:'Give every moment a little personality.'},
   {id:'modules',label:'Modules',icon:Shapes,description:''},
+  {id:'attention',label:'Attention',icon:Bell,description:'The right message, at the right moment.'},
   {id:'designer',label:'Designer',icon:Settings2,description:'Shape every detail of your companion.'},
   {id:'device',label:'Device',icon:SlidersHorizontal,description:'Make your companion feel right at home.'},
 ]
-type Page = 'overview' | 'animations' | 'modules' | 'device' | 'designer'
+type Page = 'overview' | 'animations' | 'modules' | 'device' | 'designer' | 'attention'
 const moduleIcons = {face:Smile,usage:Activity,hey:Mail,clock:Clock,roon:Music2}
 const statusList: Status[] = ['working','blocked','done','idle','unknown','disconnected']
 const readPage = (): Page => navigation.some(n => n.id === location.hash.slice(1)) ? location.hash.slice(1) as Page : 'overview'
@@ -88,6 +90,7 @@ export default function App() {
             {page==='overview'&&<Overview snapshot={snapshot} pending={pending||!online} action={action} save={save} navigate={navigate}/>}
             {page==='animations'&&<Animations snapshot={snapshot} pending={pending||!online} action={action} save={save} audition={audition} auditionId={localAnimation}/>}
             {page==='modules'&&<Modules snapshot={snapshot} pending={pending||!online} action={action} save={save}/>}
+            {page==='attention'&&<Attention snapshot={snapshot} pending={pending||!online} action={action}/>}
             {page==='device'&&<DeviceSettings snapshot={snapshot} pending={pending||!online} action={action} save={save}/>}
           </>}
         </div><aside className="preview-column" aria-label="Live device preview"><DevicePreview snapshot={snapshot} online={online} pending={pending||!online} localAnimation={localAnimation} localReplay={localReplay} onModule={switchModule} onLive={returnLive} onUsagePage={direction=>void action('usage/page',{direction})} onHeyPage={direction=>void action('hey/page',{direction})} onOpenCard={request=>void action('open-card',request)} onRoonControl={control=>void action('roon/control',{action:control})} onRoonView={expanded=>void action('roon/view',{expanded})}/>{localAnimation!==undefined&&<div className="audition-actions"><div><Eye size={15}/><span>Previewing <strong>{animationName(localAnimation)}</strong></span></div><Button disabled={pending||!online||!snapshot?.settings.modules.face.enabled} onClick={async()=>{if(await action('expression',{expression:localAnimation},'Animation sent to your device'))setLocalAnimation(undefined)}}><Play size={14}/>Send to device</Button></div>}</aside></div>}

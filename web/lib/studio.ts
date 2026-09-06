@@ -1,3 +1,4 @@
+import type { AttentionState } from '../components/Attention'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import defaults from '../../shared/studio-defaults.json'
@@ -20,6 +21,7 @@ export interface HeySource extends Source { items: HeyItem[]; hasMore: boolean; 
 export interface RoonSource extends Source { coreName?: string; zones: {id:string;name:string;state:string}[]; zoneId:string; track:string; artist:string; playing:boolean; canPrevious:boolean; canNext:boolean; artId:string|null; artworkLoading?:boolean }
 export interface StudioSettings extends Omit<Settings, 'mappings'|'deviceAppearance'> { mappings: Record<Status, string | null>;deviceAppearance:DeviceAppearanceSettings }
 export interface StudioSnapshot {
+  attention?: AttentionState;
   seq: number; module: ModuleId; settings: StudioSettings; settingsRevision: number;
   deviceAppearance?: {mode:DeviceTheme|'system';resolved:DeviceTheme;system:DeviceTheme;palette:DevicePalette;design:Record<ModuleId,Record<string,number>>};
   connected: boolean; error: string | null; selected: string; expression: string | null;

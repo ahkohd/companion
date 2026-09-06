@@ -1,3 +1,5 @@
+import { AttentionCallbacks } from './attention-callback.mjs';
+import { Attention } from './attention.mjs';
 import { SerialConnection } from './serial-connection.mjs';
 import { SystemAppearance } from './system-appearance.mjs';
 import http from 'node:http';
@@ -60,9 +62,13 @@ const studio = new StudioSettings(store, {
 sources.on('change', snapshot => store.setSources(snapshot));
 roon.on('change', snapshot => { store.setSources({ roon: snapshot }); void syncArtwork().catch(() => {}); });
 await studio.load();
+const attentionCallbacks = new AttentionCallbacks();
+const attention = new Attention(store, { deliver: (target, result) => attentionCallbacks.deliver(target, result), filePath: path.join(path.dirname(studio.filePath), 'attention-settings.json') });
+await attention.load();
 await systemAppearance.start();
 store.setSources({ roon: roon.snapshot() });
 device = new DeviceLink(store, {
+  onAttention: request => mutate(() => request.action === '__dismiss' ? attention.dismiss(request) : request.action === 'open' || request.action === 'back' ? attention.details({ ...request, detail: request.action === 'open' }) : attention.act(request)),
   onModule: direction => mutate(() => studio.cycleModule(direction)),
   onUsagePage: direction => mutate(() => store.cycleUsage(direction)),
   onHeyPage: direction => mutate(() => store.cycleHey(direction)),
@@ -77,7 +83,7 @@ const connection = new SerialConnection(store, { link: device, filePath: path.jo
 const streams = new Set();
 const send = (res, code, data) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2' };
-const writeRoutes = ['/api/select', '/api/expression', '/api/pointer', '/api/display', '/api/settings', '/api/module', '/api/modules/refresh', '/api/usage/page', '/api/hey/page', '/api/roon/control', '/api/roon/view', '/api/open-card', '/api/device/connection', '/api/device/refresh', '/api/device/reconnect'];
+const writeRoutes = ['show', 'update', 'clear', 'act', 'details', 'dismiss', 'configure'].map(action => `/api/attention/${action}`).concat(['/api/select', '/api/expression', '/api/pointer', '/api/display', '/api/settings', '/api/module', '/api/modules/refresh', '/api/usage/page', '/api/hey/page', '/api/roon/control', '/api/roon/view', '/api/open-card', '/api/device/connection', '/api/device/refresh', '/api/device/reconnect']);
 const server = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
@@ -105,7 +111,7 @@ const server = http.createServer(async (req, res) => {
     try {
       // Settings can contain all animation mappings and provider choices. Serial frames
       // keep their separate 2048-byte limit in DeviceLink.
-      let bytes = 0; const limit = url.pathname === '/api/settings' ? 8192 : 1024;
+      let bytes = 0; const limit = (url.pathname === '/api/settings' || url.pathname.startsWith('/api/attention/')) ? 16384 : 1024;
       for await (const chunk of req) { bytes += chunk.length; if (bytes > limit) return send(res, 413, { error: 'Request too large' }); body += chunk; }
       const request = JSON.parse(body);
       if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('Send a JSON object.');
@@ -114,6 +120,7 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, store.snapshot());
       }
       const snapshot = await mutate(async () => {
+        if (url.pathname.startsWith('/api/attention/')) { const result = await attention[url.pathname.split('/').at(-1)](request); return { ...store.snapshot(), attentionResult: result }; }
         if (url.pathname === '/api/device/connection') await connection.configure(request);
         else if (url.pathname === '/api/device/refresh') await connection.refresh();
         else if (url.pathname === '/api/device/reconnect') await connection.reconnect();
@@ -168,5 +175,5 @@ server.listen(port, '127.0.0.1', () => {
   void connection.start().catch(error => store.setDevice({ status: 'disconnected', error: error.message })); void sources.start(); void roon.start();
 });
 server.on('error', error => { console.error(error.message); shutdown(); process.exitCode = 1; });
-function shutdown() { if (closing) return; closing = true; listening = false; clearInterval(keepAlive); clearInterval(clockTick); systemAppearance.stop(); sources.stop(); roon.stop(); pointer.stop(); herdr.stop(); void connection.stop(); for (const res of streams) res.end(); server.close(); }
+function shutdown() { if (closing) return; closing = true; listening = false; clearInterval(keepAlive); clearInterval(clockTick); attention.stop(); attentionCallbacks.stop(); systemAppearance.stop(); sources.stop(); roon.stop(); pointer.stop(); herdr.stop(); void connection.stop(); for (const res of streams) res.end(); server.close(); }
 process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);

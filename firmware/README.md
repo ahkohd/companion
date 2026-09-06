@@ -43,6 +43,7 @@ Run the hardware checks one at a time while the bridge remains stopped:
 .venv/bin/python scripts/check-module-device.py "$ESP_SERIAL_PORT"
 .venv/bin/python scripts/check-device.py "$ESP_SERIAL_PORT"
 .venv/bin/python scripts/check-grok-device.py "$ESP_SERIAL_PORT"
+.venv/bin/python firmware/check_attention_device.py "$ESP_SERIAL_PORT"
 ```
 
 The module check covers usage and HEY states, missing and zero usage values, empty and paged mailbox lists, UTF-8 limits, live expression mappings and invalid frames. The original check covers native faces, timing, gaze and layout. The Grok check compares every clip against browser-decoded frame hashes.
@@ -66,7 +67,7 @@ The bridge uses newline-delimited JSON at 115200 baud. Its frames are at most 20
 
 A state frame requires `type:"state"`, `v:1`, an unsigned 32-bit `seq`, a native `state`, `label`, `name` and `counts`. The native states are `working`, `blocked`, `done`, `idle`, `sleep`, `unknown` and `disconnected`. The count object requires `working`, `blocked`, `done`, `idle` and `unknown`, each an integer from 0 to 65535.
 
-The firmware accepts label and name strings shorter than 64 UTF-8 bytes. The bridge uses a stricter 48-byte limit. These common fields remain required for every module, even when a dashboard is visible.
+The firmware accepts labels up to 96 UTF-8 bytes and names up to 192 bytes. The bridge uses a stricter 48-byte limit for normal modules. Attention limits titles to 24 characters and descriptions to 48 characters, with a separate frame-size check. These common fields remain required for every module, even when a dashboard is visible.
 
 Optional fields:
 
@@ -83,6 +84,9 @@ Optional fields:
 | `look` | Normalised mouse gaze, or null for natural gaze |
 | `textGap` | 4, 8 or 16 pixels; defaults to 8 |
 | `statusDots` | Legacy boolean, accepted for compatibility but no longer changes the presentation |
+| `attention` | Temporary face overlay with message `id`, `revision`, `detail`, `body` and one or two `actions` containing `id` and `label` |
+
+When attention is present, tapping the face sends an `attention` event with `v:1`, the visible message `id`, `revision` and `action:"open"`. In details, a tap sends the selected action ID. Actions stack vertically. A double tap sends `__dismiss` from either view. Single taps wait 300 milliseconds so a double tap cannot trigger approval first. Vertical swipes scroll the body. Normal module controls are suspended until the bridge clears the overlay. Both the bridge and device reject stale responses; the device never executes an action itself.
 
 The legacy `statusDots:true` value remains valid only with `state:"working"` and `preview:false`. New hosts should leave it false or omit it.
 

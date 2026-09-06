@@ -153,7 +153,7 @@ export class FaceStore extends EventEmitter {
   }
   canCycleUsage() {
     return this.activeModule === 'usage' && this.settings.modules.usage.enabled &&
-      this.display().dashboard.status === 'ready' && this.display().dashboard.pageCount > 1;
+      this.display().dashboard?.status === 'ready' && this.display().dashboard.pageCount > 1;
   }
   cycleUsage(direction) {
     if (![-1, 1].includes(direction)) throw new Error('Choose a valid page direction.');
@@ -164,7 +164,7 @@ export class FaceStore extends EventEmitter {
   }
   canCycleHey() {
     return this.activeModule === 'hey' && this.settings.modules.hey.enabled &&
-      this.display().dashboard.status === 'ready' && this.display().dashboard.pageCount > 1;
+      this.display().dashboard?.status === 'ready' && this.display().dashboard.pageCount > 1;
   }
   cycleHey(direction) {
     if (![-1, 1].includes(direction)) throw new Error('Choose a valid page direction.');
@@ -199,6 +199,8 @@ export class FaceStore extends EventEmitter {
     this.publish();
   }
   display() {
+    const attention = this.attention?.snapshot().active;
+    if (attention) return { state: attention.animation.startsWith('grok:') ? 'idle' : attention.animation, animation: attention.animation.startsWith('grok:') ? attention.animation : null, label: attention.title, name: attention.description, statusDots: false, nameShimmer: false };
     if (this.activeModule !== 'face') {
       const display = dashboardFor(this.activeModule, this.sources, this.settings, Date.now(), this.usagePage, this.heyPage);
       if (this.activeModule === 'roon') display.dashboard.expanded = this.roonExpanded;
@@ -211,7 +213,7 @@ export class FaceStore extends EventEmitter {
     return display;
   }
   tickClock() {
-    if (this.activeModule !== 'clock') return;
+    if (this.activeModule !== 'clock' || this.attention?.active) return;
     const dashboard = this.display().dashboard;
     const key = JSON.stringify([dashboard.time, dashboard.weekday]);
     if (key !== this.lastClockKey) this.publish();
@@ -222,8 +224,8 @@ export class FaceStore extends EventEmitter {
         !/^[a-f0-9]{40}$/.test(roon.artId || '') && !roon.artworkLoading) this.roonExpanded = false;
     this.syncWorkingSession();
     const display = this.display();
-    if (this.activeModule === 'clock') this.lastClockKey = JSON.stringify([display.dashboard.time, display.dashboard.weekday]);
-    const displayKey = JSON.stringify([this.selected, this.expression, this.activeModule, display.state, display.animation, display.expression]);
+    if (this.activeModule === 'clock' && !this.attention?.active) this.lastClockKey = JSON.stringify([display.dashboard.time, display.dashboard.weekday]);
+    const displayKey = JSON.stringify([this.selected, this.expression, this.activeModule, display.state, display.animation, display.expression, this.attention?.active?.id, this.attention?.active?.stepIndex]);
     if (displayKey !== this.lastDisplayKey) { this.changedAt = Date.now(); this.animationEpoch = (this.animationEpoch + 1) >>> 0; this.lastDisplayKey = displayKey; }
     this.seq++; this.emit('change', this.snapshot());
   }
@@ -233,7 +235,7 @@ export class FaceStore extends EventEmitter {
     this.systemAppearance = value; this.publish();
   }
   snapshot() {
-    return { v: 1, deviceAppearance: resolveDeviceAppearance(this.settings, this.systemAppearance), module: this.activeModule, modules: this.sources, settings: this.settings, settingsRevision: this.settingsRevision, animationMs: Math.round(performance.now()), ageMs: Math.min(4294967295, Math.max(0, Date.now() - this.changedAt)), seq: this.seq, connected: this.connected, error: this.error, agents: this.agents,
+    return { v: 1, deviceAppearance: resolveDeviceAppearance(this.settings, this.systemAppearance), module: this.attention?.active ? 'face' : this.activeModule, attention: this.attention?.snapshot() ?? { enabled: true, active: null, queue: [], history: [] }, modules: this.sources, settings: this.settings, settingsRevision: this.settingsRevision, animationMs: Math.round(performance.now()), ageMs: Math.min(4294967295, Math.max(0, Date.now() - this.changedAt)), seq: this.seq, connected: this.connected, error: this.error, agents: this.agents,
       selected: this.selected, expression: this.expression, display: this.display(), layout: { textGap: this.textGap }, changedAt: this.changedAt, updatedAt: this.updatedAt, device: this.device, pointer: this.pointer };
   }
   wireDashboard(dashboard) {
@@ -247,11 +249,13 @@ export class FaceStore extends EventEmitter {
     const { state, animation = null, expression, dashboard, statusDots = false, nameShimmer = false, label, name, counts = this.faceDisplay().counts } = this.display();
     const look = this.pointer.enabled && this.pointer.status === 'active' ? { x: this.pointer.x, y: this.pointer.y } : null;
     const moduleIds = this.enabledModules();
-    const moduleFrame = this.activeModule === 'face' ? {} : { module: this.activeModule, dashboard: this.wireDashboard(dashboard) };
-    const fields = DESIGN_SCHEMA[this.activeModule];
+    const attention = this.attention?.snapshot().active;
+    const visibleModule = attention ? 'face' : this.activeModule;
+    const moduleFrame = visibleModule === 'face' ? {} : { module: visibleModule, dashboard: this.wireDashboard(dashboard) };
+    const fields = DESIGN_SCHEMA[visibleModule];
     const appearance = resolveDeviceAppearance(this.settings, this.systemAppearance);
-    const design = fields.map(field => appearance.design[this.activeModule]?.[field.key] ?? field.default);
+    const design = fields.map(field => appearance.design[visibleModule]?.[field.key] ?? field.default);
     const designFrame = fields.some((field, index) => design[index] !== field.default) ? { design } : {};
-    return { type: 'state', v: 1, theme: appearance.resolved, palette: appearance.palette, rotation: this.settings.device.rotation, ...moduleFrame, ...designFrame, moduleIndex: moduleIds.indexOf(this.activeModule), moduleCount: moduleIds.length, showModuleNavigation: this.settings.device.showModuleNavigation, showCardBackgrounds: this.settings.device.showCardBackgrounds, expression, epoch: this.animationEpoch, animationMs: Math.round(performance.now()), ageMs: Math.min(4294967295, Math.max(0, Date.now() - this.changedAt)), seq: this.seq, state, animation, statusDots, nameShimmer, preview: this.expression !== null, look, label: wireText(label), name: wireText(name), counts, textGap: this.textGap };
+    return { type: 'state', v: 1, theme: appearance.resolved, palette: appearance.palette, rotation: this.settings.device.rotation, ...moduleFrame, ...designFrame, ...(attention ? { attention: { id: attention.id, revision: attention.revision, detail: attention.detail, body: attention.body || attention.description || 'No additional details.', actions: attention.actions.map(({ id, label }) => ({ id, label })) } } : {}), moduleIndex: moduleIds.indexOf(this.activeModule), moduleCount: moduleIds.length, showModuleNavigation: !attention && this.settings.device.showModuleNavigation, showCardBackgrounds: this.settings.device.showCardBackgrounds, expression, epoch: this.animationEpoch, animationMs: Math.round(performance.now()), ageMs: Math.min(4294967295, Math.max(0, Date.now() - this.changedAt)), seq: this.seq, state, animation, statusDots, nameShimmer, preview: this.expression !== null, look, label: attention ? label : wireText(label), name: attention ? name : wireText(name), counts, textGap: this.textGap };
   }
 }

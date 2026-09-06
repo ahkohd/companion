@@ -194,3 +194,20 @@ test('panel transfer diagnostics distinguish accepted settings from pixel transf
   link.receive(JSON.stringify({ ...ack, panel_transfers: -1 }) + '\n');
   assert.equal(store.device.panelTransfers, 9);
 });
+
+
+test('panel failures remain visible on healthy USB and clear only their own recovered error', () => {
+  const { store, link, frames } = setup(); link.receive(ready);
+  const writes = frames.length;
+  const ack = { type: 'ack', v: 1, seq: store.seq, rendered_seq: store.seq, render_us: 10000, eyes: [[20,40],[20,40]], panel_transfers: 12, panel_rotation: 85, panel_error: 257 };
+  const receive = fields => link.receive(JSON.stringify({ ...ack, ...fields }) + '\n');
+  receive({});
+  assert.equal(store.device.status, 'connected'); assert.equal(store.device.panelError, 257);
+  assert.match(store.device.error, /Display transfer failed \(257\)/); assert.match(store.device.error, /USB is connected/);
+  const failure = store.device.error;
+  receive({ panel_error: -1 }); assert.equal(store.device.error, failure);
+  receive({ panel_error: 0 }); assert.equal(store.device.error, null); assert.equal(store.device.panelError, 0);
+  receive({ panel_error: 258 }); assert.match(store.device.error, /258/);
+  store.setDevice({ error: 'Another error' }); receive({ panel_error: 0 }); assert.equal(store.device.error, 'Another error');
+  assert.equal(frames.length, writes, 'Panel diagnostics must not trigger serial writes');
+});

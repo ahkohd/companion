@@ -23,11 +23,11 @@ before(async () => {
     const functions = source.slice(source.indexOf('static bool json_uint('), source.indexOf('static bool name_shimmer_enabled('))
       .replace(/static int status_top_for_gap\([^]*?\n}\n/, '')
     const definitions = source.match(/^#define (?:FRAME_MAX|FACE_LABEL_CAPACITY|FACE_NAME_CAPACITY|TEXT_GAP_DEFAULT) .*$/gm).join('\n')
-    const code = `#include <math.h>\n#include <stdio.h>\n#include <string.h>\n#include "face_model.h"\n#include "grok_catalog.h"\n#include "display_module.h"\n${definitions}\n${type}\n${functions}\nint main(void) { char line[4096]; while(fgets(line,sizeof(line),stdin)) { status_snapshot_t frame={0}; size_t length=strlen(line); if(length&&line[length-1]=='\\n') line[--length]=0; puts(parse_state_frame(line,length,&frame)?"true":"false"); } }\n`
+    const code = `#include <math.h>\n#include <stdio.h>\n#include <string.h>\n#include "face_model.h"\n#include "grok_catalog.h"\n#include "display_module.h"\n#include "attention_protocol.h"\n${definitions}\n${type}\n${functions}\nint main(void) { char line[4096]; while(fgets(line,sizeof(line),stdin)) { status_snapshot_t frame={0}; size_t length=strlen(line); if(length&&line[length-1]=='\\n') line[--length]=0; puts(parse_state_frame(line,length,&frame)?"true":"false"); } }\n`
     const sourcePath = path.join(directory, 'frames.c'); frameProbe = path.join(directory, 'frames')
     await writeFile(sourcePath, code)
     execFileSync('cc', ['-std=c11', '-O2', '-Wall', '-Wextra', '-Werror', '-I', 'firmware/main', '-I', cjson,
-      sourcePath, 'firmware/main/display_module.c', path.join(cjson, 'cJSON.c'), '-lm', '-o', frameProbe])
+      sourcePath, 'firmware/main/display_module.c', 'firmware/main/attention_protocol.c', path.join(cjson, 'cJSON.c'), '-lm', '-o', frameProbe])
   }
 })
 after(async () => { if (directory) await rm(directory, { recursive: true, force: true }) })
@@ -88,4 +88,29 @@ test('production state parser accepts every integer rotation and retains legacy 
   const invalid = [-90, -1, 360, 0.5, 180.5, true, null, '90', {}, []].map(rotation => ({ ...frame, rotation }))
   const results = execFileSync(frameProbe, [], { input: [...valid, ...invalid].map(JSON.stringify).join('\n') + '\n', encoding: 'utf8' }).trim().split('\n').map(JSON.parse)
   assert.deepEqual(results, [...valid.map(() => true), ...invalid.map(() => false)])
+})
+
+
+test('production attention parser validates bounded actions and descriptions', needsIdf, () => {
+  const frame = { type: 'state', v: 1, seq: 7, state: 'done', label: 'Review', name: 'Tap for details',
+    counts: { working: 0, blocked: 0, done: 1, idle: 0, unknown: 0 } }
+  const attention = { id: '12345678-abcd-1234-abcd-123456789012', revision: 1, detail: true, body: 'x'.repeat(480),
+    actions: [{ id: 'approve', label: 'Approve' }, { id: 'cancel', label: 'Cancel' }] }
+  const cases = [undefined, attention, { ...attention, detail: false }, { ...attention, body: 'x'.repeat(481) },
+    { ...attention, revision: -1 }, { ...attention, revision: 1.5 }, { ...attention, actions: [] },
+    { ...attention, actions: [{ id: 'open', label: 'Open' }] },
+    { ...attention, actions: [{ id: '__dismiss', label: 'Dismiss' }] },
+    { ...attention, actions: [{ id: 'bad"token', label: 'Bad' }] },
+    { ...attention, actions: [{ id: 'ok', label: 'x'.repeat(17) }] },
+    { ...attention, actions: [attention.actions[0], attention.actions[0]] }]
+  const result = execFileSync(frameProbe, [], { input: cases.map(attention => JSON.stringify({ ...frame, attention })).join('\n') + '\n', encoding: 'utf8' }).trim().split('\n').map(JSON.parse)
+  assert.deepEqual(result, [true, true, true, false, false, false, false, false, false, false, false, false])
+})
+
+
+test('attention double tap never emits first approval and cancels stale gestures', needsIdf, () => {
+  const gestureProbe = path.join(directory, 'attention-gesture')
+  execFileSync('cc', ['-std=c11', '-O2', '-Wall', '-Wextra', '-Werror', '-I', 'firmware/main', '-I', cjson,
+    'test/attention-gesture-probe.c', 'firmware/main/attention_gesture.c', '-o', gestureProbe])
+  execFileSync(gestureProbe)
 })

@@ -24,6 +24,24 @@ The app detects installed CodexBar and HEY CLIs. Herdr Face, CodexBar, HEY and C
 
 Enable the modules you want on the Modules page. Swipe left or right to switch between them. You can change their order.
 
+## Get an agent's attention request
+
+Attention lets an agent temporarily show a face, a message and a choice over your current module. Tap the face to read the detail and choose an action. Actions stack vertically. Double-tap the face or detail view to dismiss without choosing an action. When it closes, your previous module returns.
+
+Notifications expire after 10 seconds of visible time. Decision requests stay until answered or cleared. Reading the detail pauses a notification's timer. Requests queue so agents cannot overwrite each other's messages.
+
+Use the Attention page to send a preview, manage the queue or turn interruptions off. Install the local agent command and skill with:
+
+```sh
+node scripts/install-attention.mjs
+```
+
+Add a reference to `skills/companion-attention/SKILL.md` in your agent instructions. The [attention skill](skills/companion-attention/SKILL.md) covers notifications, decisions, chained screens and waiting for a response. Keep this checkout in place while using the installed links.
+
+The queue and recent responses are held in memory. Restarting the bridge clears them. A timeout or missing request never counts as approval.
+
+Agents can attach a generic command callback to receive the result as JSON on standard input. The skill includes a tip for using this to reply to an originating Herdr pane. Delivery is attempted once, with a 5-second timeout; failures remain visible in request history.
+
 ## Run the app
 
 Use Node.js 22.12 or later and pnpm 11.19.0. Development and hardware checks have been tested on macOS with Node.js 24.

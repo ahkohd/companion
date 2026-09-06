@@ -1,3 +1,4 @@
+import { AttentionOverlay } from './Attention'
 import { resolveDesign } from '../../shared/device-appearance.mjs'
 import { devicePaletteDefaults } from '../lib/device-appearance'
 import { defaultDesign, designFor, colorHex, sansLine, pixelLine, percentageTop, type DesignValues, type Designs } from '../lib/design'
@@ -222,8 +223,9 @@ function Hint({ text, children }: { text: string; children: ReactElement }) {
 
 export default function DevicePreview({ snapshot, localAnimation, localReplay = 0, onModule, onLive, onUsagePage, onHeyPage, onOpenCard, onRoonControl, onRoonView, pending = false, online = false }: DevicePreviewProps) {
   const titleId = useId()
-  const local = localAnimation !== undefined
+  const local = localAnimation !== undefined && !snapshot?.attention?.active
   const localClock = useMemo(() => ({ changedAt: Date.now(), animationMs: performance.now() }), [localAnimation, localReplay])
+  const attention = !local && online ? snapshot?.attention?.active : null
   const module: ModuleId = local ? 'face' : snapshot && moduleIds.includes(snapshot.module) ? snapshot.module : 'face'
   const enabled = snapshot?.settings.device.moduleOrder.filter((id): id is ModuleId =>
     moduleIds.includes(id as ModuleId) && snapshot.settings.modules[id as ModuleId].enabled) ?? ['face']
@@ -233,8 +235,8 @@ export default function DevicePreview({ snapshot, localAnimation, localReplay = 
   const semanticState = local ? (localAnimation?.startsWith('grok:') ? 'idle' : localAnimation || 'idle') : online ? display?.state || 'disconnected' : 'disconnected'
   const animation = local ? localAnimation?.startsWith('grok:') ? localAnimation : null : online ? display?.animation : null
   const pose = local ? semanticState : online ? display?.expression || semanticState : 'disconnected'
-  const caption = wireText(local ? animationName(localAnimation || 'idle') : online ? display?.label || 'Connecting' : 'Disconnected')
-  const subtitle = wireText(local ? 'Preview' : online ? display?.name || '' : 'Waiting for host')
+  const caption = attention ? attention.title : wireText(local ? animationName(localAnimation || 'idle') : online ? display?.label || 'Connecting' : 'Disconnected')
+  const subtitle = attention ? attention.description : wireText(local ? 'Preview' : online ? display?.name || '' : 'Waiting for host')
   const shimmer = semanticState === 'working' && !animation
   const nameShimmer = !local && online && display?.nameShimmer === true
   const forcedPose = Boolean(snapshot && (snapshot.expression !== null || snapshot.display.expression))
@@ -243,10 +245,10 @@ export default function DevicePreview({ snapshot, localAnimation, localReplay = 
   const look = online && pointer?.enabled && pointer.status === 'active' ? { x: pointer.x, y: pointer.y } : null
   const showNavigation = snapshot?.settings.device.showModuleNavigation === true
   const swipeEnabled = snapshot?.settings.device.swipeEnabled ?? true
-  const canSwitch = !pending && online && enabled.length > 1
+  const canSwitch = !attention && !pending && online && enabled.length > 1
   const canPage = !pending && online && (module === 'usage' || module === 'hey') && display?.dashboard?.status === 'ready' && (display.dashboard.pageCount ?? 1) > 1
   const changePage = (direction: number) => module === 'hey' ? onHeyPage(direction) : onUsagePage(direction)
-  const showLive = local || Boolean(snapshot && snapshot.expression !== null)
+  const showLive = !attention && (local || Boolean(snapshot && snapshot.expression !== null))
   const gesture = useRef<{ id: number; x: number; y: number; at: number } | null>(null)
   const palette=snapshot?.deviceAppearance?.palette || devicePaletteDefaults[snapshot?.settings.deviceAppearance?.mode==='light'?'light':'dark']
   const resolvedDesign=resolveDesign(snapshot?.settings.design || defaultDesign,palette)
@@ -289,7 +291,7 @@ export default function DevicePreview({ snapshot, localAnimation, localReplay = 
           onKeyDown={event=>{if(canPage&&['ArrowDown','ArrowUp'].includes(event.key)){event.preventDefault();changePage(event.key==='ArrowDown'?1:-1)}}}
           onPointerDown={pointerDown} onPointerUp={pointerUp}
           onPointerCancel={() => { gesture.current = null }} onLostPointerCapture={() => { gesture.current = null }}>
-          {module === 'face' ? <Face
+          {attention?.detail ? null : module === 'face' ? <Face
             palette={palette} backgroundColor={palette.background} foregroundColor={palette.foreground} faceScale={faceDesign.scale ?? 100} textColor={faceDesign.textColor} mutedColor={faceDesign.mutedColor} animation={animation} state={pose} statusLabel={shimmer ? caption : undefined} nameLabel={nameShimmer ? subtitle : undefined}
             changedAt={local ? localClock.changedAt : snapshot?.changedAt ?? 0}
             animationMs={local ? localClock.animationMs : snapshot?.animationMs ?? 0}
@@ -299,9 +301,10 @@ export default function DevicePreview({ snapshot, localAnimation, localReplay = 
           /> : <ModuleDashboard module={module} dashboard={display?.dashboard} online={online}
             animationMs={snapshot?.animationMs ?? 0} reduced={snapshot?.settings.appearance.reducedMotion ?? false}
             showCardBackgrounds={snapshot?.settings.device.showCardBackgrounds === true} design={resolvedDesign} onRoonControl={onRoonControl} onRoonView={onRoonView} onOpenCard={onOpenCard} onSwipe={swipe} pending={pending} />}
-          {module === 'face' && !shimmer && <div className="screen-caption"><span>{caption}</span></div>}
-          {module === 'face' && !nameShimmer && <div className="screen-name">{subtitle}</div>}
-          {showNavigation && enabled.length > 1 && <div className="dp-screen-pages" aria-hidden="true">
+          {module === 'face' && !attention?.detail && !shimmer && <div className="screen-caption"><span>{caption}</span></div>}
+          {module === 'face' && !attention?.detail && !nameShimmer && <div className="screen-name">{subtitle}</div>}
+          {attention && <AttentionOverlay key={`${attention.id}:${attention.revision}`} request={attention} detail={attention.detail} pending={pending || !online}/>}
+          {!attention && showNavigation && enabled.length > 1 && <div className="dp-screen-pages" aria-hidden="true">
             {enabled.map(id => <i key={id} data-active={id === module} />)}
           </div>}
         </div>
@@ -320,7 +323,7 @@ export default function DevicePreview({ snapshot, localAnimation, localReplay = 
             const Icon = moduleIcons[id]
             return <Hint key={id} text={`Show ${moduleNames[id]} on the device`}>
               <Button variant="ghost" size="sm" className="dp-module-pill" aria-label={`Show ${moduleNames[id]} on the device`}
-                aria-pressed={!local && id === module} disabled={pending || !online}
+                aria-pressed={!local && id === module} disabled={pending || !online || !!attention}
                 onClick={() => { if (local || id !== module) onModule(id) }}>
                 <Icon aria-hidden="true" /><span>{shortNames[id]}</span>
               </Button>
