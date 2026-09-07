@@ -1,3 +1,5 @@
+import { AppSettings } from './app-settings.mjs';
+import { DiagnosticLogs, installConsoleLogs } from './logs.mjs';
 import { AttentionCallbacks } from './attention-callback.mjs';
 import { Attention } from './attention.mjs';
 import { SerialConnection } from './serial-connection.mjs';
@@ -16,6 +18,10 @@ import { ModuleSources } from './module-sources.mjs';
 import { RoonSource } from './roon-source.mjs';
 import { openCard } from './open-card.mjs';
 
+const appSettings = new AppSettings(process.env.COMPANION_NATIVE_TOKEN);
+delete process.env.COMPANION_NATIVE_TOKEN;
+const logs = new DiagnosticLogs();
+const restoreConsole = installConsoleLogs(logs);
 const root = fileURLToPath(new URL('../dist/', import.meta.url));
 let port = Number(process.env.PORT || 4317);
 const store = new FaceStore();
@@ -83,7 +89,7 @@ const connection = new SerialConnection(store, { link: device, filePath: path.jo
 const streams = new Set();
 const send = (res, code, data) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2' };
-const writeRoutes = ['show', 'update', 'clear', 'act', 'details', 'dismiss', 'configure'].map(action => `/api/attention/${action}`).concat(['/api/select', '/api/expression', '/api/pointer', '/api/display', '/api/settings', '/api/module', '/api/modules/refresh', '/api/usage/page', '/api/hey/page', '/api/roon/control', '/api/roon/view', '/api/open-card', '/api/device/connection', '/api/device/refresh', '/api/device/reconnect']);
+const writeRoutes = ['show', 'update', 'clear', 'act', 'details', 'dismiss', 'configure'].map(action => `/api/attention/${action}`).concat(['/api/app-settings', '/api/native/sync', '/api/select', '/api/expression', '/api/pointer', '/api/display', '/api/settings', '/api/module', '/api/modules/refresh', '/api/usage/page', '/api/hey/page', '/api/roon/control', '/api/roon/view', '/api/open-card', '/api/device/connection', '/api/device/refresh', '/api/device/reconnect']);
 const server = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
@@ -96,6 +102,8 @@ const server = http.createServer(async (req, res) => {
     res.write(`data: ${JSON.stringify(store.snapshot())}\n\n`); streams.add(res);
     req.on('close', () => streams.delete(res)); return;
   }
+  if (url.pathname === '/api/app-settings' && req.method === 'GET') return send(res, 200, appSettings.snapshot());
+  if (url.pathname === '/api/logs' && req.method === 'GET') return send(res, 200, logs.snapshot());
   if (url.pathname === '/api/state' && req.method === 'GET') return send(res, 200, store.snapshot());
   if (url.pathname.startsWith('/api/roon/art/') && req.method === 'GET') {
     const id = url.pathname.slice('/api/roon/art/'.length);
@@ -105,6 +113,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, {'Content-Type':art.mime,'Cache-Control':'private, max-age=3600'}); return res.end(art.bytes);
   }
   if (writeRoutes.includes(url.pathname) && req.method === 'POST') {
+    if (url.pathname === '/api/native/sync' && !appSettings.authorized(req.headers['x-companion-token'])) return send(res, 403, { error: 'Native app authentication required' });
     if (req.headers.origin && !['http://127.0.0.1:5173', 'http://localhost:5173', `http://127.0.0.1:${port}`, `http://localhost:${port}`].includes(req.headers.origin)) return send(res, 403, { error: 'Origin not allowed' });
     if (!req.headers['content-type']?.startsWith('application/json')) return send(res, 415, { error: 'Use JSON' });
     let body = '';
@@ -115,6 +124,8 @@ const server = http.createServer(async (req, res) => {
       for await (const chunk of req) { bytes += chunk.length; if (bytes > limit) return send(res, 413, { error: 'Request too large' }); body += chunk; }
       const request = JSON.parse(body);
       if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('Send a JSON object.');
+      if (url.pathname === '/api/native/sync') return send(res, 200, appSettings.sync(request));
+      if (url.pathname === '/api/app-settings') return send(res, 200, await appSettings.change(request));
       if (url.pathname === '/api/modules/refresh') {
         await sources.refresh(request.id);
         return send(res, 200, store.snapshot());
@@ -160,7 +171,9 @@ const server = http.createServer(async (req, res) => {
     res.end(req.method === 'HEAD' ? undefined : data);
   } catch { send(res, 404, { error: 'Page not found. Run npm run build first.' }); }
 });
+logs.observeDevice(store.device);
 store.on('change', snapshot => {
+  logs.observeDevice(snapshot.device);
   void syncArtwork().catch(() => {});
   const payload = `data: ${JSON.stringify(snapshot)}\n\n`;
   for (const res of streams) { if (res.writableLength > 1024 * 1024) { res.destroy(); streams.delete(res); } else res.write(payload); }
@@ -170,10 +183,10 @@ herdr.on('offline', error => store.disconnect(error));
 const keepAlive = setInterval(() => { for (const res of streams) res.write(': heartbeat\n\n'); }, 15000);
 const clockTick = setInterval(() => { store.tickClock(); store.tickWorkingSessions(); }, 1000);
 server.listen(port, '127.0.0.1', () => {
-  listening = true; port = server.address().port; console.log(`Companion Studio: http://127.0.0.1:${port}`);
+  listening = true; port = server.address().port; console.log(`Companion: http://127.0.0.1:${port}`);
   if (studio.value.modules.face.enabled) herdr.start();
   void connection.start().catch(error => store.setDevice({ status: 'disconnected', error: error.message })); void sources.start(); void roon.start();
 });
 server.on('error', error => { console.error(error.message); shutdown(); process.exitCode = 1; });
-function shutdown() { if (closing) return; closing = true; listening = false; clearInterval(keepAlive); clearInterval(clockTick); attention.stop(); attentionCallbacks.stop(); systemAppearance.stop(); sources.stop(); roon.stop(); pointer.stop(); herdr.stop(); void connection.stop(); for (const res of streams) res.end(); server.close(); }
+function shutdown() { if (closing) return; closing = true; listening = false; clearInterval(keepAlive); clearInterval(clockTick); attention.stop(); attentionCallbacks.stop(); systemAppearance.stop(); sources.stop(); roon.stop(); pointer.stop(); herdr.stop(); void connection.stop(); for (const res of streams) res.end(); server.close(); restoreConsole(); }
 process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);

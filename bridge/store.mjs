@@ -59,7 +59,7 @@ export class FaceStore extends EventEmitter {
   settings = defaultSettings(); settingsRevision = 0; activeModule = 'face'; usagePage = 0; heyPage = 0; roonExpanded = false;
   sources = { usage: { status: 'disabled', refreshing: false, installed: null, version: null, updatedAt: null, error: null, providers: [] }, hey: { status: 'disabled', refreshing: false, installed: null, version: null, updatedAt: null, error: null, items: [], hasMore: false, selectedBox: 'imbox' } };
   animationEpoch = 0; changedAt = Date.now(); updatedAt = null; error = 'Connecting to Herdr';
-  device = { status: 'disabled', port: null, lastAck: null, error: null };
+  device = { profile: null, status: 'disabled', port: null, lastAck: null, error: null };
   pointer = { supported: process.platform === 'darwin', enabled: false, intervalMs: 100, status: 'off', error: null, x: 0, y: 0 };
   lastDisplayKey = ''; lastClockKey = '';
   workingSessionId = null; workingSessionSince = 0;

@@ -1,0 +1,151 @@
+name: Release macOS
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Release channel'
+        required: true
+        type: choice
+        options: [production, beta]
+        default: production
+      bump:
+        description: 'Version bump (ignored when an exact version is supplied)'
+        required: true
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      version:
+        description: 'Exact version override (optional, for example 0.1.0)'
+        required: false
+        type: string
+      auto_publish:
+        description: 'Publish after a successful build; unchecked saves a test artifact only'
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: companion-release
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+    outputs:
+      version: ${{ steps.prepare.outputs.version }}
+      prefix: ${{ steps.prepare.outputs.prefix }}
+    env:
+      RELEASE_CHANNEL: ${{ inputs.channel }}
+      RELEASE_BUMP: ${{ inputs.bump }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
+      SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
+      COMPANION_UPDATE_BASE_URL: ${{ vars.COMPANION_UPDATE_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.12.0'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.19.0'
+      - name: Prepare release version and channel
+        id: prepare
+        run: node scripts/release/prepare.mjs
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - name: Fetch verified release dependencies
+        run: node scripts/release/fetch-dependencies.mjs
+      - name: Import Developer ID certificate
+        env:
+          CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/companion-signing.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 24)
+          echo "::add-mask::$KEYCHAIN_PASSWORD"
+          printf '%s' "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          rm "$RUNNER_TEMP/certificate.p12"
+      - name: Build portable signed app
+        run: |
+          export COMPANION_NODE_BINARY="$PWD/.tools/release-deps/node/node-v24.12.0-darwin-arm64/bin/node"
+          export SPARKLE_FRAMEWORK="$PWD/.tools/release-deps/sparkle/Sparkle.framework"
+          export SPARKLE_FEED_URL="${COMPANION_UPDATE_BASE_URL%/}/arm64/appcast.xml"
+          node scripts/build-menubar.mjs --release
+      - name: Select release notes
+        run: |
+          NOTES="docs/release-notes/$COMPANION_VERSION.md"
+          if [ -f "$NOTES" ]; then echo "RELEASE_NOTES_FILE=$NOTES" >> "$GITHUB_ENV"; fi
+      - name: Notarize, package and sign update feed
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: node scripts/release/package.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: companion-macos-${{ steps.prepare.outputs.version }}
+          path: .tools/release/arm64/
+          if-no-files-found: error
+      - name: Remove signing keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/companion-signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/certificate.p12"
+  publish:
+    if: inputs.auto_publish
+    needs: build
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_BUCKET: ${{ vars.R2_BUCKET }}
+      VERSION: ${{ needs.build.outputs.version }}
+      RELEASE_CHANNEL: ${{ inputs.channel }}
+      PREFIX: ${{ needs.build.outputs.prefix }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: companion-macos-${{ needs.build.outputs.version }}
+          path: release
+      - name: Publish immutable archives, then feed
+        run: |
+          set -euo pipefail
+          test -n "$R2_BUCKET"
+          ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          EXISTING=$(aws s3api list-objects-v2 --bucket "$R2_BUCKET" --prefix "$PREFIX/Companion-$VERSION-arm64.zip" --endpoint-url "$ENDPOINT" --query KeyCount --output text)
+          test "$EXISTING" = 0 || { echo 'Version already exists; choose a new version.' >&2; exit 1; }
+          FEEDS=$(aws s3api list-objects-v2 --bucket "$R2_BUCKET" --prefix "$PREFIX/appcast.xml" --endpoint-url "$ENDPOINT" --query KeyCount --output text)
+          if [ "$FEEDS" != 0 ]; then
+            aws s3 cp "s3://$R2_BUCKET/$PREFIX/appcast.xml" previous-appcast.xml --endpoint-url "$ENDPOINT"
+            python3 - <<'PYTHON'
+          import os, xml.etree.ElementTree as ET
+          def version(v): return tuple(int(p) for p in v.split('.'))
+          previous=[version(e.text) for e in ET.parse('previous-appcast.xml').iter('{http://www.andymatuschak.org/xml-namespaces/sparkle}version') if e.text]
+          if previous and version(os.environ['VERSION']) <= max(previous): raise SystemExit('Release version must increase.')
+          PYTHON
+          fi
+          aws s3 cp "release/Companion-$VERSION-arm64.zip" "s3://$R2_BUCKET/$PREFIX/" --endpoint-url "$ENDPOINT" --cache-control 'public,max-age=31536000,immutable'
+          aws s3 cp "release/Companion-$VERSION-arm64.dmg" "s3://$R2_BUCKET/$PREFIX/" --endpoint-url "$ENDPOINT" --cache-control 'public,max-age=31536000,immutable'
+          TAG="v$VERSION"
+          FLAGS=()
+          if [ "$RELEASE_CHANNEL" = beta ]; then TAG="$TAG-beta"; FLAGS+=(--prerelease); fi
+          gh release create "$TAG" "release/Companion-$VERSION-arm64.zip" "release/Companion-$VERSION-arm64.dmg" --target "$GITHUB_SHA" --title "Companion $VERSION" --generate-notes "${FLAGS[@]}"
+          aws s3 cp release/updates/appcast.xml "s3://$R2_BUCKET/$PREFIX/appcast.xml" --endpoint-url "$ENDPOINT" --content-type application/rss+xml --cache-control 'public,max-age=300'

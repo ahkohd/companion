@@ -20,6 +20,7 @@ export interface HeyItem { id: string; sender: string; subject: string }
 export interface HeySource extends Source { items: HeyItem[]; hasMore: boolean; selectedBox: string }
 export interface RoonSource extends Source { coreName?: string; zones: {id:string;name:string;state:string}[]; zoneId:string; track:string; artist:string; playing:boolean; canPrevious:boolean; canNext:boolean; artId:string|null; artworkLoading?:boolean }
 export interface StudioSettings extends Omit<Settings, 'mappings'|'deviceAppearance'> { mappings: Record<Status, string | null>;deviceAppearance:DeviceAppearanceSettings }
+export interface BoardProfile { id:string; name:string; status:'tested'|'experimental'; display:{width:number;height:number;shape:'round'|'rectangular'} }
 export interface StudioSnapshot {
   attention?: AttentionState;
   seq: number; module: ModuleId; settings: StudioSettings; settingsRevision: number;
@@ -28,7 +29,7 @@ export interface StudioSnapshot {
   agents: {id: string; name: string; kind: string; project: string; state: string}[];
   display: {state: string; label: string; name: string; nameShimmer?: boolean; animation?: string | null; expression?: string; counts?: Record<string,number>; dashboard?: {status: string; refreshing?: boolean; title: string; detail: string; track?:string;artist?:string;artId?:string;expanded?:boolean;playing?:boolean;canPrevious?:boolean;canNext?:boolean; time?: string; weekday?: string; blinkSeparator?: boolean; pageIndex?: number; pageCount?: number; openToken?: string; primary?: {provider?: string; label: string; remaining: number | null; reset: string; openable?: boolean}; secondary?: {provider?: string; label: string; remaining: number | null; reset: string; openable?: boolean}; items?: (Pick<HeyItem, 'sender' | 'subject'> & {openable?: boolean})[]}};
   changedAt: number; animationMs: number; ageMs: number; updatedAt: number | null; layout: {textGap: number};
-  device: {fontError?: boolean; status: string; port: string | null; error: string | null; lastAck?: number; renderedModule?: string;connection?:SerialConnectionState};
+  device: {profile?:BoardProfile|null;fontError?: boolean; status: string; port: string | null; error: string | null; lastAck?: number; renderedModule?: string;connection?:SerialConnectionState};
   pointer: {supported: boolean; enabled: boolean; intervalMs: number; status: string; error: string | null; x: number; y: number};
   modules: {usage: UsageSource; hey: HeySource; roon: RoonSource};
 }

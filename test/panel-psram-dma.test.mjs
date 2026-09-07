@@ -79,6 +79,6 @@ int main(void) {
 `)
   const executable = path.join(directory, 'probe')
   execFileSync('cc', ['-std=c11', '-O2', '-Wall', '-Wextra', '-Werror', '-I', directory,
-    path.join(directory, 'probe.c'), 'firmware/main/panel_psram_dma.c', '-o', executable])
+    path.join(directory, 'probe.c'), 'firmware/boards/waveshare-1.75-b/panel_psram_dma.c', '-o', executable])
   assert.match(execFileSync(executable, [], { encoding: 'utf8' }), /DMA queue bounded/)
 })

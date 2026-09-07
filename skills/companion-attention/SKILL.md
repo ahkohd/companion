@@ -1,6 +1,6 @@
 ---
 name: companion-attention
-description: Send completion notifications or explicit decision requests to the local Companion Studio display, then read the user's response. Use when an agent should notify the user or needs their attention on the companion device.
+description: Send completion notifications or explicit decision requests to the local Companion display, then read the user's response. Use when an agent should notify the user or needs their attention on the companion device.
 ---
 
 # Companion attention

@@ -492,7 +492,7 @@
       "key": "titleSize",
       "label": "Status size",
       "group": "Typography",
-      "default": 22,
+      "default": 24,
       "min": 12,
       "max": 48,
       "unit": "px"

@@ -40,6 +40,9 @@ test('HTTP and SSE serve real state, restrict writes and shut down cleanly', { t
   });
   const [output] = await once(child.stdout, 'data');
   const base = output.toString().match(/http:\/\/127\.0\.0\.1:\d+/)?.[0]; assert.ok(base, logs);
+  const logResponse = await fetch(base + '/api/logs'); assert.equal(logResponse.status, 200);
+  const diagnostics = await logResponse.json(); assert.equal(typeof diagnostics.sessionId, 'string'); assert.ok(diagnostics.entries.some(entry => entry.message.startsWith('Companion:')));
+  assert.equal((await fetch(base + '/api/logs', { method: 'POST' })).status, 404);
   const stream = await fetch(base + '/api/events'); const reader = stream.body.getReader();
   let streamText = '';
   while (!streamText.includes('Test agent')) streamText += new TextDecoder().decode((await reader.read()).value);

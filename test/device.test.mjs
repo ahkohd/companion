@@ -211,3 +211,12 @@ test('panel failures remain visible on healthy USB and clear only their own reco
   store.setDevice({ error: 'Another error' }); receive({ panel_error: 0 }); assert.equal(store.device.error, 'Another error');
   assert.equal(frames.length, writes, 'Panel diagnostics must not trigger serial writes');
 });
+
+test('ready metadata publishes the registered profile and rejects conflicting screens', () => {
+  const { store, link, frames } = setup();
+  link.receive(JSON.stringify({ type: 'ready', v: 1, board: 'waveshare-1.75-b', display: { width: 480, height: 480, shape: 'round' } }) + '\n');
+  assert.equal(frames.length, 0);
+  link.receive(JSON.stringify({ type: 'ready', v: 1, board: 'waveshare-1.75-b', display: { width: 466, height: 466, shape: 'round' } }) + '\n');
+  assert.equal(store.device.profile.id, 'waveshare-1.75-b');
+  assert.ok(frames.length > 0);
+});

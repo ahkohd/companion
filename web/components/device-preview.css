@@ -87,3 +87,10 @@
 .device-preview .dp-card-hit:active:not(:disabled) { background:#ffffff0a; }
 .device-preview .dp-card-hit:focus-visible { outline:2px solid var(--device-foreground,#f2edfa); outline-offset:-3px; }
 .device-preview .dp-card-hit:disabled { pointer-events:none; cursor:default; }
+
+/* Panel geometry comes from the connected board; module coordinates stay square. */
+.device-preview .dp-display { position:relative; width:100%; overflow:hidden; border-radius:50%; }
+.device-preview .dp-hardware[data-shape="rectangular"] { border-radius:18px; }
+.device-preview .dp-hardware[data-shape="rectangular"]::before { border-radius:12px; }
+.device-preview .dp-display[data-shape="rectangular"] { border-radius:4px; }
+.device-preview .dp-display[data-shape="rectangular"] .device-screen::after { border-radius:0; }

@@ -1,0 +1,8 @@
+{
+  "id": "waveshare-1.75-b",
+  "name": "Waveshare ESP32-S3-Touch-AMOLED-1.75-B",
+  "status": "tested",
+  "protocol": 1,
+  "display": { "width": 466, "height": 466, "shape": "round" },
+  "canvas": { "width": 466, "height": 466 }
+}

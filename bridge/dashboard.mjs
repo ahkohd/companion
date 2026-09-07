@@ -41,7 +41,7 @@ export function dashboardFor(module, sources, settings, now = Date.now(), usageP
     const r = sources.roon || {}, enabled = settings.modules.roon.enabled;
     const status = enabled ? (r.status === 'ready' && !r.zoneId ? 'unavailable' : wireStatus[r.status] || 'unavailable') : 'unavailable';
     return { state: 'idle', label: '', name: '', dashboard: {
-      status, title: 'Roon', expanded: false, detail: !enabled ? 'Enable Roon in the playground' : status === 'auth' ? 'Enable Companion Studio in Roon' : r.status === 'ready' && !r.zoneId ? 'Choose a Roon zone in the playground' : status !== 'ready' ? 'Connect Roon in the playground' : '',
+      status, title: 'Roon', expanded: false, detail: !enabled ? 'Enable Roon in the playground' : status === 'auth' ? 'Enable Companion in Roon' : r.status === 'ready' && !r.zoneId ? 'Choose a Roon zone in the playground' : status !== 'ready' ? 'Connect Roon in the playground' : '',
       track: mailWireText(r.track || 'Nothing playing', 64), artist: mailWireText(r.artist || '', 64),
       artId: /^[a-f0-9]{40}$/.test(r.artId || '') ? r.artId : '', playing: !!r.playing,
       canPrevious: status === 'ready' && !!r.canPrevious, canNext: status === 'ready' && !!r.canNext,

@@ -8,6 +8,7 @@ const source = fileURLToPath(new URL('../scripts/pointer.swift', import.meta.url
 const binary = fileURLToPath(new URL('../.tools/bin/herdr-pointer', import.meta.url));
 let building;
 export function ensurePointerHelper() {
+  if (process.env.COMPANION_POINTER_HELPER) return stat(process.env.COMPANION_POINTER_HELPER).then(() => process.env.COMPANION_POINTER_HELPER);
   return building ??= (async () => {
     const sourceInfo = await stat(source);
     const built = await stat(binary).catch(() => null);

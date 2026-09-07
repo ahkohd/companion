@@ -66,7 +66,7 @@ The built-in configuration matches the saved setup promoted on 6 September 2026.
 
 ## Roon
 
-Roon uses the official local extension APIs for transport, zone subscriptions and album artwork. It does not use the Roon ARC port or scrape Web Display. Enable Roon in Modules, then enable Companion Studio in Roon Settings > Extensions. Select a listening zone, or leave Automatic selected to follow a playing zone. The optional server address uses Roon's local API on port 9330; leaving it blank uses discovery.
+Roon uses the official local extension APIs for transport, zone subscriptions and album artwork. It does not use the Roon ARC port or scrape Web Display. Enable Roon in Modules, then enable Companion in Roon Settings > Extensions. Select a listening zone, or leave Automatic selected to follow a playing zone. The optional server address uses Roon's local API on port 9330; leaving it blank uses discovery.
 
 The module shows artwork, track and artist with previous, play/pause and next controls. These affect only the selected zone. Disable the module to stop its connection and controls. Missing, removed and disconnected zones clear stale track data. Designer exposes artwork size, position and corners, text sizes and positions, button size and spacing, and colours.
 

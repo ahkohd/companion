@@ -1,0 +1,6 @@
+#pragma once
+
+#define COMPANION_BOARD_ID "waveshare-1.75-b"
+#define COMPANION_DISPLAY_WIDTH 466
+#define COMPANION_DISPLAY_HEIGHT 466
+#define COMPANION_DISPLAY_SHAPE "round"

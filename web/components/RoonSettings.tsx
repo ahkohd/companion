@@ -15,7 +15,7 @@ export default function RoonSettings({snapshot:s,pending,save,action}:{snapshot:
   const ready=config.enabled&&source?.status==='ready'
   return <div className="roon-settings">
     <div className="roon-setup">
-      <div><h3>{ready?'Connected to your music':'Connect Roon'}</h3><p>{ready?source.coreName:'Enable Companion Studio in Roon Settings > Extensions, then choose your listening zone.'}</p></div>
+      <div><h3>{ready?'Connected to your music':'Connect Roon'}</h3><p>{ready?source.coreName:'Enable Companion in Roon Settings > Extensions, then choose your listening zone.'}</p></div>
       <label className="roon-zone">Listening zone<select aria-label="Roon listening zone" value={config.zoneId} disabled={pending||!config.enabled} onChange={e=>void save({modules:{roon:{zoneId:e.target.value}}})}><option value="">Automatic{source?.zoneId?` (${source.zones.find(z=>z.id===source.zoneId)?.name||'current zone'})`:''}</option>{config.zoneId&&!source?.zones?.some(z=>z.id===config.zoneId)&&<option value={config.zoneId}>Saved zone (offline)</option>}{source?.zones?.map(zone=><option key={zone.id} value={zone.id}>{zone.name}</option>)}</select></label>
       {source?.error&&<p className="source-message" role="status">{source.error}</p>}
     </div>

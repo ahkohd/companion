@@ -1,8 +1,10 @@
 # Waveshare firmware
 
-Native LVGL rendering for Companion Studio on the Waveshare ESP32-S3-Touch-AMOLED-1.75-B. The display supports the animated Herdr face, CodexBar usage meters, HEY mailbox lists, a clock and Roon playback. USB supplies power and carries state from the local bridge.
+Native LVGL rendering for Companion on the Waveshare ESP32-S3-Touch-AMOLED-1.75-B. The display supports the animated Herdr face, CodexBar usage meters, HEY mailbox lists, a clock and Roon playback. USB supplies power and carries state from the local bridge.
 
 This target is the round 466 x 466 board with a CO5300 AMOLED and CST9217 touch controller. Other Waveshare sizes need their own hardware port.
+
+See the [hardware compatibility table](../README.md#hardware-compatibility) for related round, rectangular and watch-style boards. They are untested port candidates, not additional supported firmware targets. The browser preview and Designer also currently assume this round screen.
 
 ## Build and flash
 

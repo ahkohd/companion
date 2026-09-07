@@ -1,0 +1,11 @@
+{
+  "name": "victor-cdn",
+  "account_id": "73182c5ab5d538b2a69272d1fbb86eed",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-09-08",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "cdn.victor.computer", "custom_domain": true }],
+  "r2_buckets": [{ "binding": "COMPANION", "bucket_name": "companion-releases" }],
+  "observability": { "enabled": true }
+}

@@ -1,3 +1,4 @@
+import { previewDisplay } from '../lib/board-preview'
 import { AttentionOverlay } from './Attention'
 import { resolveDesign } from '../../shared/device-appearance.mjs'
 import { devicePaletteDefaults } from '../lib/device-appearance'
@@ -222,6 +223,8 @@ function Hint({ text, children }: { text: string; children: ReactElement }) {
 }
 
 export default function DevicePreview({ snapshot, localAnimation, localReplay = 0, onModule, onLive, onUsagePage, onHeyPage, onOpenCard, onRoonControl, onRoonView, pending = false, online = false }: DevicePreviewProps) {
+  const panel = previewDisplay(snapshot?.device.profile)
+  const canvasSide = Math.min(panel.width, panel.height)
   const titleId = useId()
   const local = localAnimation !== undefined && !snapshot?.attention?.active
   const localClock = useMemo(() => ({ changedAt: Date.now(), animationMs: performance.now() }), [localAnimation, localReplay])
@@ -285,8 +288,9 @@ export default function DevicePreview({ snapshot, localAnimation, localReplay = 
     </header>
 
     <div className="dp-stage">
-      <div className="dp-hardware" role="group" aria-label={local ? 'Local animation preview' : 'Device screen'}>
-        <div className="device-screen" dir="ltr" style={style} tabIndex={canPage?0:undefined}
+      <div className="dp-hardware" data-shape={panel.shape} style={{aspectRatio:'auto'}} role="group" aria-label={local ? 'Local animation preview' : 'Device screen'}>
+        <div className="dp-display" data-shape={panel.shape} style={{aspectRatio:`${panel.width} / ${panel.height}`,background:colorHex(palette.background)}}>
+        <div className="device-screen" dir="ltr" style={{...style,position:'absolute',width:`${canvasSide/panel.width*100}%`,height:`${canvasSide/panel.height*100}%`,left:'50%',top:'50%',transform:'translate(-50%, -50%)',borderRadius:panel.shape==='round'?'50%':0}} tabIndex={canPage?0:undefined}
           aria-label={module==='clock'?'Clock':module==='roon'?'Roon playback':module!=='face'?`${module==='hey'?'Mailbox list':'Usage cards'}. Use the up and down arrow keys to browse.`:undefined}
           onKeyDown={event=>{if(canPage&&['ArrowDown','ArrowUp'].includes(event.key)){event.preventDefault();changePage(event.key==='ArrowDown'?1:-1)}}}
           onPointerDown={pointerDown} onPointerUp={pointerUp}
@@ -308,10 +312,11 @@ export default function DevicePreview({ snapshot, localAnimation, localReplay = 
             {enabled.map(id => <i key={id} data-active={id === module} />)}
           </div>}
         </div>
+        </div>
       </div>
       <div className="dp-stage-meta">
         <span className="dp-mode" data-local={local}>{local ? <ScanFace aria-hidden="true" /> : <Radio aria-hidden="true" />}{local ? 'Local preview' : 'Live device'}</span>
-        <span className="dp-resolution">466 x 466</span>
+        <span className="dp-resolution">{panel.width} x {panel.height}</span>
       </div>
     </div>
 

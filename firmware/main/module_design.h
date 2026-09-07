@@ -123,7 +123,7 @@ static inline void module_design_default(unsigned kind, module_design_t *out)
         case 0: out->face = (face_design_t){
             .titleOffset = 0,
             .nameY = 395,
-            .titleSize = 22,
+            .titleSize = 24,
             .nameSize = 16,
             .titleWidth = 340,
             .nameWidth = 260,

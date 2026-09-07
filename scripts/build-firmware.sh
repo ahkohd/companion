@@ -21,4 +21,4 @@ fi
 
 # shellcheck disable=SC1091
 source "$IDF_DIR/export.sh" >/dev/null
-exec idf.py -C "$ROOT/firmware" build
+exec idf.py -C "$ROOT/firmware" -D "COMPANION_BOARD=${COMPANION_BOARD:-waveshare-1.75-b}" build

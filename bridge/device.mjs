@@ -1,3 +1,4 @@
+import { profileForReady } from './board-profiles.mjs';
 import { SerialPort } from 'serialport';
 import { randomInt } from 'node:crypto';
 import grokCatalog from '../shared/grok-catalog.json' with { type: 'json' };
@@ -33,6 +34,7 @@ export class DeviceLink {
   connect() {
     if (this.stopped) return;
     this.ready = false; this.buffer = ''; this.dropping = false; this.writing = false;
+    this.store.setDevice({ profile: null });
     this.clearArtPacket(); this.artTransfer = null;
     if (!this.attempted) this.store.setDevice({ status: 'connecting', port: this.path, error: null });
     this.attempted = true;
@@ -72,9 +74,10 @@ export class DeviceLink {
         Promise.resolve().then(() => this.onAttention(message)).catch(() => {}); continue;
       }
       if (this.store.attention?.active && !['ready', 'ack', 'artAck'].includes(message.type)) continue;
-      if (message.type === 'ready' && message.board === 'waveshare-1.75-b') {
+      const profile = profileForReady(message);
+      if (profile) {
         this.ready = true; this.lastAck = Date.now(); this.prepareArtwork();
-        this.store.setDevice({ status: 'connected', error: null }); this.send();
+        this.store.setDevice({ status: 'connected', error: null, profile }); this.send();
       } else if (message.type === 'artAck') {
         this.receiveArtAck(message);
       } else if (message.type === 'ack' && this.ready && Number.isSafeInteger(message.seq) && message.seq >= 0 && message.seq <= this.store.seq) {

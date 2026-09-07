@@ -1,0 +1,22 @@
+import { spawn } from 'node:child_process';
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+const env=process.env;
+for(const key of ['COMPANION_VERSION','APPLE_ID','APPLE_APP_PASSWORD','APPLE_TEAM_ID','SPARKLE_PRIVATE_KEY','COMPANION_UPDATE_BASE_URL'])if(!env[key])throw Error(`Missing ${key}`);
+if(!/^\d+\.\d+\.\d+$/.test(env.COMPANION_VERSION))throw Error('Version must be numeric major.minor.patch.');
+const base=new URL(env.COMPANION_UPDATE_BASE_URL);if(base.protocol!=='https:')throw Error('Updates require HTTPS.');
+const run=(command,args,input)=>new Promise((resolve,reject)=>{const p=spawn(command,args,{stdio:[input?'pipe':'ignore','inherit','inherit']});p.once('error',reject);p.once('exit',code=>code===0?resolve():reject(Error(`${command} exited ${code}`)));if(input){p.stdin.on('error',()=>{});p.stdin.end(input)}});
+const app=path.resolve('.tools/Companion.app'),out=path.resolve('.tools/release',process.arch);await mkdir(out,{recursive:true});
+const submit=async file=>run('xcrun',['notarytool','submit',file,'--apple-id',env.APPLE_ID,'--password',env.APPLE_APP_PASSWORD,'--team-id',env.APPLE_TEAM_ID,'--wait','--timeout','20m']);
+const notarize=path.join(out,'notarize.zip');await run('ditto',['-c','-k','--sequesterRsrc','--keepParent',app,notarize]);await submit(notarize);await run('xcrun',['stapler','staple',app]);await run('xcrun',['stapler','validate',app]);await run('spctl',['--assess','--type','execute','--verbose',app]);
+const {rm,copyFile}=await import('node:fs/promises');await rm(notarize);
+const name=`Companion-${env.COMPANION_VERSION}-${process.arch}`;
+await run('ditto',['-c','-k','--sequesterRsrc','--keepParent',app,path.join(out,`${name}.zip`)]);
+const dmgRoot=path.resolve('.tools/dmg-root');await rm(dmgRoot,{recursive:true,force:true});await mkdir(dmgRoot);await run('ditto',[app,path.join(dmgRoot,'Companion.app')]);await run('ln',['-s','/Applications',path.join(dmgRoot,'Applications')]);
+const dmg=path.join(out,`${name}.dmg`);await run('hdiutil',['create','-volname','Companion','-srcfolder',dmgRoot,'-ov','-format','UDZO',dmg]);await run('codesign',['--force','--sign',env.APPLE_SIGNING_IDENTITY,dmg]);await submit(dmg);await run('xcrun',['stapler','staple',dmg]);
+// Only the ZIP goes into Sparkle's archive directory; the DMG is a manual installer.
+const feed=path.join(out,'updates');await mkdir(feed,{recursive:true});await copyFile(path.join(out,`${name}.zip`),path.join(feed,`${name}.zip`));
+const notes=env.RELEASE_NOTES_FILE;if(notes)await copyFile(notes,path.join(feed,`${name}.md`));
+await run(path.resolve('.tools/release-deps/sparkle/bin/generate_appcast'),['--ed-key-file','-','--download-url-prefix',`${base.href.replace(/\/$/,'')}/${process.arch}/`,'--embed-release-notes',feed],env.SPARKLE_PRIVATE_KEY+'\n');
+await writeFile(path.join(out,'release.json'),JSON.stringify({version:env.COMPANION_VERSION,arch:process.arch,commit:env.GITHUB_SHA||null,archive:`${name}.zip`,installer:`${name}.dmg`},null,2)+'\n');
+console.log(`Staged signed release in ${out}`);

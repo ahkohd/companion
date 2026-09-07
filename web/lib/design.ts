@@ -12,7 +12,7 @@ export const pixelLine = (size:number) => Math.round(size*1.22)
 export const percentageTop = (size:number) => {const y=65-pixelLine(size)/2;return Math.sign(y)*Math.round(Math.abs(y))}
 export function designFor(design:Partial<Designs>|undefined,module:ModuleId):DesignValues {return {...defaultDesign[module],...design?.[module]}}
 export function validateDesign(value:unknown):Designs {
- if(!value || typeof value!=='object' || Array.isArray(value))throw Error('Choose a Companion Studio design file.')
+ if(!value || typeof value!=='object' || Array.isArray(value))throw Error('Choose a Companion design file.')
  const result=structuredClone(defaultDesign)
  for(const [module,fields] of Object.entries(value)){
   if(!(module in designSchema)||!fields||typeof fields!=='object'||Array.isArray(fields))throw Error('Unknown module in design file.')

@@ -1,6 +1,6 @@
 {
-  "name": "companion-studio",
-  "version": "0.1.0",
+  "name": "companion",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,7 +13,12 @@
     "fonts:generate": "node scripts/build-fonts.mjs",
     "check": "pnpm test && pnpm run build",
     "firmware:setup": "bash scripts/setup-firmware.sh",
-    "firmware:build": "bash scripts/build-firmware.sh"
+    "firmware:build": "bash scripts/build-firmware.sh",
+    "menubar:build": "node scripts/build-menubar.mjs",
+    "release:deps": "node scripts/release/fetch-dependencies.mjs",
+    "release:bundle": "node scripts/build-menubar.mjs --bundle",
+    "release:build": "node scripts/build-menubar.mjs --release",
+    "release:package": "node scripts/release/package.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

@@ -593,3 +593,21 @@ Firmware flashed and both themes verified over USB in Face, Usage, HEY, Clock an
 - Dashboard now exposes panel-transfer errors from acknowledgements and clears them after healthy acknowledgements without clearing unrelated errors.
 - Full check passed 241 tests and production build; the final DMA rounding regression and native build also passed. Independent review checked descriptor rounding, callback semantics, PSRAM map placement and ACK byte limits.
 - Flashed and verified firmware. A physical 300-update stress test used current user design settings, six animation clips, repeated detail transitions and rotations of 85, 22 and 137 degrees. All 300 frames were acknowledged over 99.2 seconds; 602 panel transfers completed with zero panel/font errors. Minimum largest DMA block was 63,488 bytes; minimum internal free memory was 110,999 bytes.
+
+## macOS menu bar launcher
+
+- Built and ad hoc signature verified with `pnpm menubar:build`.
+- Installed in `~/Applications/Companion Studio.app`; live Node child connected to the USB device.
+- Forced bridge exit recovered automatically with a new child process.
+- App termination stopped both app and bridge within the bounded shutdown period; relaunch reconnected.
+- Native UI automation could not inspect the windowless menu app (accessibility timeout). Login registration and menu clicks were not automated.
+
+## Portable macOS releases and Sparkle
+
+- Sparkle 2.9.6 and Node 24.12.0 official archives verified against pinned SHA-256 digests.
+- Portable ad hoc build passed, including native dependency imports; production dependency closure reduced runtime from 1 GB to approximately 155 MB with Sparkle.
+- Full Sparkle launcher compilation, nested Developer ID signing, strict signature verification and signed native-addon imports passed.
+- Signed portable runtime served the dashboard and state API from an isolated temporary working directory with no development PATH, no USB and integrations disabled.
+- Release workflow YAML and packaging JavaScript syntax validated.
+- Test release used a non-publishing placeholder feed. It was not installed or published.
+- Apple notarization, public hosting and an actual Sparkle update round trip remain untested until their credentials and host are configured.

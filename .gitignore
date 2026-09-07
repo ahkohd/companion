@@ -1,5 +1,6 @@
 # Dependencies and local toolchains
 node_modules/
+.wrangler/
 /.tools/
 /.venv/
 

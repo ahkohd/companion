@@ -11,7 +11,7 @@
 #include <string.h>
 
 #include "cJSON.h"
-#include "bsp/esp-bsp.h"
+#include "board.h"
 #include "driver/usb_serial_jtag.h"
 #include "esp_err.h"
 #include "esp_heap_caps.h"
@@ -22,6 +22,11 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "lvgl.h"
+
+/* Module layout and rotation still use the original logical canvas. A new
+ * geometry must port those paths before it can claim working firmware. */
+_Static_assert(COMPANION_DISPLAY_WIDTH == 466 && COMPANION_DISPLAY_HEIGHT == 466,
+    "Port module layout and screen rotation before using a different canvas");
 
 #define FRAME_MAX 2048
 #define FACE_LABEL_CAPACITY 97
@@ -56,8 +61,6 @@ extern const uint8_t grok_clips_end[] asm("_binary_grok_clips_bin_end");
 #define NAME_MASK_H 60
 #define TEXT_GAP_DEFAULT 8
 
-static const char READY_JSON[] =
-    "{\"type\":\"ready\",\"v\":1,\"board\":\"waveshare-1.75-b\"}\n";
 static const char CYCLE_JSON[] = "{\"type\":\"cycle\",\"v\":1}\n";
 
 typedef struct {
@@ -522,7 +525,7 @@ static void serial_task(void *argument)
     while (true) {
         int64_t now = esp_timer_get_time();
         if (now >= next_ready_us && host_timed_out(now)) {
-            serial_write_line(READY_JSON);
+            serial_write_line(companion_board_ready_json());
             next_ready_us = now + READY_PERIOD_US;
         }
 
@@ -623,7 +626,7 @@ static void refresh_face(lv_timer_t *timer)
     status_copy(&status);
     if (screen_rotation_apply(status.rotation)) {
         ++display_rotation_revision;
-        lv_indev_t *input = bsp_display_get_input_dev();
+        lv_indev_t *input = companion_board_input();
         if (input) { lv_indev_reset(input, NULL); lv_indev_wait_release(input); }
         shown_revision = UINT32_MAX;
         lv_obj_invalidate(lv_screen_active());
@@ -755,7 +758,7 @@ static void refresh_face(lv_timer_t *timer)
     } else active_clip = -1;
     if (clip_ok) {
         face_gaze_t gaze = face_motion_gaze(&motion,animation_time);
-        grok_blit_themed(clip_pixels,face_pixels,466,466,gaze.x*gaze.mix,gaze.y*gaze.mix,layout->scale,status.module.palette.background,status.module.palette.foreground);
+        grok_blit_themed(clip_pixels,face_pixels,COMPANION_DISPLAY_WIDTH,COMPANION_DISPLAY_HEIGHT,gaze.x*gaze.mix,gaze.y*gaze.mix,layout->scale,status.module.palette.background,status.module.palette.foreground);
         accent.count = 0;
     } else {
         face_accent_sample(asleep ? FACE_SLEEP : pose, state_elapsed / 1000000.0, &accent);
@@ -766,22 +769,22 @@ static void refresh_face(lv_timer_t *timer)
         else if (pose == FACE_WORKING && status.module.palette.accent != 0x65c18c) eye_color = status.module.palette.accent;
         else if (pose == FACE_DONE && status.module.palette.success != 0x65c18c) eye_color = status.module.palette.success;
         else if (pose == FACE_BLOCKED && status.module.palette.warning != 0xd9be81) eye_color = status.module.palette.warning;
-        face_rasterize_themed(face_pixels, 466, 466, frame, eye_color, layout->scale, status.module.palette.background);
-        face_draw_decor_scaled(face_pixels, 466, 466, accent.decor, accent.count, layout->scale);
+        face_rasterize_themed(face_pixels, COMPANION_DISPLAY_WIDTH, COMPANION_DISPLAY_HEIGHT, frame, eye_color, layout->scale, status.module.palette.background);
+        face_draw_decor_scaled(face_pixels, COMPANION_DISPLAY_WIDTH, COMPANION_DISPLAY_HEIGHT, accent.decor, accent.count, layout->scale);
     }
     int shimmer_pixels = 0;
     if (shimmer_active) {
         uint32_t base = status.module.palette.muted;
         uint32_t peak = layout->textColor;
-        shimmer_pixels = face_shimmer_blit_palette(shimmer_mask, SHIMMER_MASK_W, SHIMMER_MASK_H, face_pixels, 466, 466,
-            (466 - layout->titleWidth) / 2, status_top, animation_time, false, base, peak);
+        shimmer_pixels = face_shimmer_blit_palette(shimmer_mask, SHIMMER_MASK_W, SHIMMER_MASK_H, face_pixels, COMPANION_DISPLAY_WIDTH, COMPANION_DISPLAY_HEIGHT,
+            (COMPANION_DISPLAY_WIDTH - layout->titleWidth) / 2, status_top, animation_time, false, base, peak);
     }
     int name_shimmer_pixels = 0;
     if (name_shimmer_active) {
         uint32_t base = layout->mutedColor;
         uint32_t peak = status.module.palette.foreground;
         name_shimmer_pixels = face_shimmer_blit_palette(name_shimmer_mask, NAME_MASK_W, NAME_MASK_H,
-            face_pixels, 466, 466, (466 - layout->nameWidth) / 2, layout->nameY, animation_time, false, base, peak);
+            face_pixels, COMPANION_DISPLAY_WIDTH, COMPANION_DISPLAY_HEIGHT, (COMPANION_DISPLAY_WIDTH - layout->nameWidth) / 2, layout->nameY, animation_time, false, base, peak);
     }
     lv_obj_invalidate(face_canvas);
     xSemaphoreTake(state_mutex, portMAX_DELAY);
@@ -907,13 +910,13 @@ static void make_ui(void)
     lv_obj_add_flag(screen, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(screen, touch_event, LV_EVENT_ALL, NULL);
 
-    face_pixels = heap_caps_malloc(466 * 466 * sizeof(uint16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    face_pixels = heap_caps_malloc(COMPANION_DISPLAY_WIDTH * COMPANION_DISPLAY_HEIGHT * sizeof(uint16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     assert(face_pixels != NULL);
     clip_pixels = heap_caps_malloc(GROK_PIXELS * sizeof(uint16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     assert(clip_pixels != NULL);
-    memset(face_pixels, 0, 466 * 466 * sizeof(uint16_t));
+    memset(face_pixels, 0, COMPANION_DISPLAY_WIDTH * COMPANION_DISPLAY_HEIGHT * sizeof(uint16_t));
     face_canvas = lv_canvas_create(screen);
-    lv_canvas_set_buffer(face_canvas, face_pixels, 466, 466, LV_COLOR_FORMAT_RGB565);
+    lv_canvas_set_buffer(face_canvas, face_pixels, COMPANION_DISPLAY_WIDTH, COMPANION_DISPLAY_HEIGHT, LV_COLOR_FORMAT_RGB565);
     lv_obj_remove_flag(face_canvas, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
     face_motion_init(&motion, FACE_DISCONNECTED, 0);
 
@@ -992,16 +995,16 @@ void app_main(void)
 
     esp_log_set_vprintf(boot_log);
     ESP_LOGI("boot", "Starting display");
-    lv_display_t *display = bsp_display_start();
+    lv_display_t *display = companion_board_display_start();
     ESP_LOGI("boot", "Display started");
     assert(display != NULL);
-    ESP_ERROR_CHECK(bsp_display_lock(portMAX_DELAY));
-    ESP_ERROR_CHECK(bsp_display_brightness_set(40));
+    ESP_ERROR_CHECK(companion_board_display_lock(portMAX_DELAY));
+    ESP_ERROR_CHECK(companion_board_brightness(40));
     ESP_ERROR_CHECK(screen_rotation_init(display));
     ESP_LOGI("boot", "Making UI");
     make_ui();
     ESP_LOGI("boot", "UI ready");
-    bsp_display_unlock();
+    companion_board_display_unlock();
 
     BaseType_t created = xTaskCreate(serial_task, "usb-json", 16384, NULL, 6, NULL);
     assert(created == pdPASS);

@@ -1,3 +1,4 @@
+import packageInfo from '../package.json' with { type: 'json' };
 import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
@@ -72,11 +73,11 @@ export class RoonSource extends EventEmitter {
     this.pairing = pairing;
     const active = () => generation === this.generation && this.started && this.config.enabled;
     try {
-      const api = new this.deps.RoonApi({ extension_id: 'com.companion-studio.display', display_name: 'Companion Studio', display_version: '0.2.0',
-        publisher: 'Companion Studio', email: 'companion-studio@localhost', log_level: 'none',
+      const api = new this.deps.RoonApi({ extension_id: 'com.companion-studio.display', display_name: 'Companion', display_version: packageInfo.version,
+        publisher: 'Companion', email: 'companion-studio@localhost', log_level: 'none',
         get_persisted_state: () => structuredClone(this.pairing), set_persisted_state: state => this.persist(state, generation),
         core_paired: core => { if (active()) this.paired(core, generation); },
-        core_unpaired: core => { if (active() && this.core === core) { this.core = null; this.zones.clear(); this.clearArt(); this.publish({ ...blank(), status: 'auth-required', error: 'Reconnect or enable Companion Studio in Roon Settings > Extensions.' }); } },
+        core_unpaired: core => { if (active() && this.core === core) { this.core = null; this.zones.clear(); this.clearArt(); this.publish({ ...blank(), status: 'auth-required', error: 'Reconnect or enable Companion in Roon Settings > Extensions.' }); } },
       });
       this.api = api;
       api.init_services({ required_services: [this.deps.RoonTransport, this.deps.RoonImage] });
@@ -85,10 +86,10 @@ export class RoonSource extends EventEmitter {
         if (!active() || !this.config.host || this.core) return;
         this.manual = api.ws_connect({ host: this.config.host, port: 9330, onclose: () => {
           if (active() && !this.core) { clearTimeout(this.retry); this.retry = setTimeout(manualConnect, this.retryDelay); this.retry.unref?.(); }
-        }, onerror: () => { if (active() && !this.core) this.publish({ status: 'auth-required', error: 'Check the Roon server address and enable Companion Studio in Roon Settings > Extensions.' }); } });
+        }, onerror: () => { if (active() && !this.core) this.publish({ status: 'auth-required', error: 'Check the Roon server address and enable Companion in Roon Settings > Extensions.' }); } });
       };
       manualConnect();
-      this.authTimer = setTimeout(() => { if (active() && !this.core) this.publish({ status: 'auth-required', error: 'Enable Companion Studio in Roon Settings > Extensions. If it is missing, enter the server address.' }); }, this.requestTimeout);
+      this.authTimer = setTimeout(() => { if (active() && !this.core) this.publish({ status: 'auth-required', error: 'Enable Companion in Roon Settings > Extensions. If it is missing, enter the server address.' }); }, this.requestTimeout);
       this.authTimer.unref?.();
     } catch { if (active()) this.publish({ status: 'error', error: 'Could not connect to Roon. Check the server address and network.' }); }
   }

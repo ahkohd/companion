@@ -1,8 +1,8 @@
-# Companion Studio
+# Companion
 
 Follow your coding agents, check AI usage and control a small desktop display from a local web app.
 
-Companion Studio works with the [Waveshare ESP32-S3-Touch-AMOLED-1.75-B](https://www.amazon.co.uk/dp/B0F7XTJ7JW). You can also use the browser preview without a device.
+Companion is tested on the [Waveshare ESP32-S3-Touch-AMOLED-1.75-B](https://www.amazon.co.uk/dp/B0F7XTJ7JW). Other boards are not yet supported; see [hardware compatibility](#hardware-compatibility) for potential ports. You can also use the browser preview without a device.
 
 ![Overview showing sample agent statuses beside the device preview](docs/images/overview.png)
 
@@ -18,7 +18,7 @@ Choose from 5 modules:
 | CodexBar | Usage balances and reset times | An installed, configured CodexBar CLI |
 | HEY | Senders and subjects from your chosen mailbox | An installed, authenticated HEY CLI |
 | Clock | Time and an optional weekday | No additional service |
-| Roon | Album artwork, track details and playback controls | A Roon server with the Companion Studio extension enabled |
+| Roon | Album artwork, track details and playback controls | A Roon server with the Companion extension enabled |
 
 The app detects installed CodexBar and HEY CLIs. Herdr Face, CodexBar, HEY and Clock start enabled. Roon starts disabled.
 
@@ -55,7 +55,7 @@ pnpm build
 pnpm start
 ```
 
-Open [Companion Studio on your computer](http://127.0.0.1:4317).
+Open [Companion on your computer](http://127.0.0.1:4317).
 
 Leave `ESP_SERIAL_PORT` empty in `.env` to start in browser-only mode. After flashing, choose Automatic or a serial port on the Device page.
 
@@ -105,7 +105,33 @@ Mouse following is available on macOS. The face moves smoothly towards sampled c
 
 The supported [Waveshare board on Amazon UK](https://www.amazon.co.uk/dp/B0F7XTJ7JW) has a round 466 x 466 CO5300 AMOLED display, CST9217 touch controller, 16 MB flash and 8 MB PSRAM.
 
-Other Waveshare boards need their own hardware port. The device renders native LVGL graphics; it does not run the web app.
+The device renders native LVGL graphics; it does not run the web app.
+
+### Hardware compatibility
+
+**Tested support** means Companion has run on the physical board. **Theoretical compatibility** means the published hardware looks suitable for a port, not that the current firmware can be flashed and used unchanged. Only the 1.75-B has been tested.
+
+| Board | Screen | Companion status |
+| --- | --- | --- |
+| [ESP32-S3-Touch-AMOLED-1.75-B](https://www.amazon.co.uk/dp/B0F7XTJ7JW) | Round, 466 x 466 | Tested. Current firmware and layouts target this board. |
+| [Other 1.75 variants](https://docs.waveshare.com/ESP32-S3-Touch-AMOLED-1.75) and [1.75C](https://docs.waveshare.com/ESP32-S3-Touch-AMOLED-1.75C) | Round, 466 x 466 | Theoretical compatibility. Shared CO5300 display and CST9217 touch controllers make these close candidates. Wiring, power setup and board revisions still need checking and testing. |
+| [ESP32-S3-Touch-AMOLED-1.8 V2](https://docs.waveshare.com/ESP32-S3-Touch-AMOLED-1.8) | Rectangular, 368 x 448 | Potential port. Shares the CO5300 display controller, but needs board-specific touch support and layouts. V1 and V2 hardware differ. |
+| [ESP32-S3-Touch-AMOLED-2.06](https://www.waveshare.com/wiki/ESP32-S3-Touch-AMOLED-2.06) | Watch-style, 410 x 502 | Potential port. Uses CO5300 with FT3168 touch; needs a board profile and layouts for its screen. |
+| [ESP32-S3-Touch-AMOLED-2.16](https://docs.waveshare.com/ESP32-S3-Touch-AMOLED-2.16) | Square resolution, 480 x 480 | Potential port. Uses CO5300 with CST9220 touch; needs a board profile and layout validation. |
+
+These candidates are based on Waveshare's linked specifications, not compatibility tests. A square, watch or stopwatch-style enclosure does not identify the electronics inside. Check the exact model and revision. Sharing the ESP32-S3 chip, or even the display controller, does not guarantee compatible pins, touch, power management or memory.
+
+### Preview and layout limits
+
+The bridge uses an explicit board profile registry. Firmware reports its board ID and screen geometry; the dashboard and Designer use the registered screen shape and dimensions. Older 1.75-B firmware remains compatible.
+
+Module layouts still use a 466 x 466 logical canvas. A different screen can show a fitted preview, but needs matching firmware layout and touch work before it is supported. Changing Designer settings does not add another display driver.
+
+### Contribute a board port
+
+Start with the [board contribution guide](docs/adding-a-board.md). It explains the profile format, firmware boundary and physical checks required for tested support. Ports begin as experimental. The current board remains the only tested profile.
+
+### Build and flash
 
 Install the GitHub CLI, Git and Python before setting up the firmware toolchain. From the repository root, run:
 
@@ -145,7 +171,7 @@ On the Device page, choose a connection mode:
 
 A remembered device can reconnect after moving to another USB port. If several compatible devices are found, choose one manually first.
 
-Refresh scans the available ports. Reconnect closes and reopens the selected connection. The bridge waits for Companion Studio firmware before sending display data.
+Refresh scans the available ports. Reconnect closes and reopens the selected connection. The bridge waits for Companion firmware before sending display data.
 
 Connection choices are saved separately in `.cache/device-connection.json`. They take precedence over `ESP_SERIAL_PORT`, which supplies the initial choice when no saved connection exists.
 
@@ -158,6 +184,32 @@ Enabled integrations can send agent names, usage values, mail senders and subjec
 The HEY module does not send messages or fetch message bodies for display. Tapping a supported mail or usage card opens its link on your computer.
 
 The integration CLIs handle their own authentication and network requests. Mouse following keeps no cursor history. Local settings, credentials and build files are excluded by `.gitignore`.
+
+## macOS menu bar app
+
+On macOS 13 or later, build the web app and menu bar launcher:
+
+```sh
+pnpm build
+pnpm menubar:build
+mkdir -p ~/Applications
+ditto ".tools/Companion.app" "$HOME/Applications/Companion.app"
+open "$HOME/Applications/Companion.app"
+```
+
+The menu shows device status and provides Dashboard, Settings, Logs, Restart Companion, About, Check for Updates and Quit. Closing the browser leaves the bridge running. Quitting stops the bridge started by the app. An existing externally managed bridge is left alone.
+
+Logs opens the dashboard with live diagnostics, search, level filters, pause/resume, and copy/download for the filtered events. The page retains the latest 500 events from the current bridge session. If the bridge is unavailable, the menu opens the local log file instead.
+
+Launch at login is off by default. Enable it in the dashboard under App settings after copying the app to Applications. This page also shows the installed version and Sparkle update preferences. Native settings require the menu bar app to manage the bridge; update controls require a release build.
+
+Building requires the Xcode command line tools. Quit an existing copy before replacing it.
+
+This is a local launcher, not a standalone distribution. Keep this checkout, its installed dependencies and the Node runtime in place. The build records their current paths. Rebuild the launcher if you move the checkout or change the Node installation.
+
+## macOS releases
+
+Signed releases bundle Node and the dashboard and use Sparkle for updates. See [Release Companion for macOS](docs/releases.md) for signing, notarization, update hosting and the staged GitHub workflow.
 
 ## Develop and test
 

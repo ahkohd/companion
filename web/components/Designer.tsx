@@ -1,3 +1,4 @@
+import { previewDisplay } from '../lib/board-preview'
 import { useEffect, useRef, useState } from 'react'
 import { Activity, Check, CircleHelp, Clock, Download, Grid2X2, Mail, Music2, RotateCcw, Search, SlidersHorizontal, Smile, Undo2, Upload, Wifi, WifiOff } from 'lucide-react'
 import { toast } from 'sonner'
@@ -80,6 +81,7 @@ export default function Designer({snapshot:s,online,pending,action}:{snapshot:St
  const fields=designSchema[module].filter(f=>f.type!=='color').filter(f=>`${f.label} ${f.group}`.toLowerCase().includes(search.toLowerCase()))
  const groups=[...new Set(fields.map(f=>f.group))].sort((a,b)=>a==='Animation'?-1:b==='Animation'?1:0)
  const selected=draft[module]
+ const panel=previewDisplay(s.device.profile)
  const preview=structuredClone(s)
  preview.settings.design=draft as typeof s.settings.design
  preview.module=module
@@ -101,7 +103,7 @@ export default function Designer({snapshot:s,online,pending,action}:{snapshot:St
    <div className="designer-canvas">
     <div className="designer-canvas-header"><span>{moduleNames[module]}<small>{sampleContent?'Sample content':'Live content'}</small></span><button className={guides?'selected':''} title="Toggle layout guides" aria-label="Show layout guides" aria-pressed={guides} onClick={()=>setGuides(!guides)}><Grid2X2 size={16}/></button></div>
     <div className={`designer-stage ${guides?'with-guides':''}`}><DevicePreview snapshot={preview} online={true} pending={pending||!online} onModule={id=>void choose(id)} onLive={()=>setSample(false)} onUsagePage={direction=>void action('usage/page',{direction})} onHeyPage={direction=>void action('hey/page',{direction})} onOpenCard={sampleContent?undefined:request=>void action('open-card',request)} onRoonControl={sampleContent?undefined:control=>void action('roon/control',{action:control})} onRoonView={sampleContent?undefined:expanded=>void action('roon/view',{expanded})}/></div>
-    <div className="designer-canvas-footer"><label><input type="checkbox" checked={sample} onChange={e=>setSample(e.target.checked)}/>Use sample content</label><span>466 x 466 px</span></div>
+    <div className="designer-canvas-footer"><label><input type="checkbox" checked={sample} onChange={e=>setSample(e.target.checked)}/>Use sample content</label><span>{panel.width} x {panel.height} px</span></div>
     <p className="designer-canvas-note"><CircleHelp size={14}/>{sampleContent?(live?'Sample preview. Design changes sync.':'Sample preview. Live updates paused.'):live?'Adjust a value to see it here and on your device.':'Live updates are paused. Apply when your design is ready.'}</p>
     {overflow&&<p className="designer-overflow" role="status">Some content may sit outside the screen. Use guides to check its position.</p>}
    </div>
