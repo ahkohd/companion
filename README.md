@@ -2,7 +2,7 @@
 
 Follow your coding agents, check AI usage and control a small desktop display from a local web app.
 
-Companion is tested on the [Waveshare ESP32-S3-Touch-AMOLED-1.75-B](https://www.amazon.co.uk/dp/B0F7XTJ7JW). Other boards are not yet supported; see [hardware compatibility](#hardware-compatibility) for potential ports. You can also use the browser preview without a device.
+Companion is tested on the [Waveshare ESP32-S3-Touch-AMOLED-1.75-B](https://www.amazon.co.uk/dp/B0F7XTJ7JW). Have a different board? Explore [potential ports](#hardware-compatibility) or [contribute a board profile](docs/adding-a-board.md). You can also use the browser preview without a device.
 
 ![Overview showing sample agent statuses beside the device preview](docs/images/overview.png)
 
@@ -103,7 +103,7 @@ Mouse following is available on macOS. The face moves smoothly towards sampled c
 
 ## Hardware and firmware
 
-The supported [Waveshare board on Amazon UK](https://www.amazon.co.uk/dp/B0F7XTJ7JW) has a round 466 x 466 CO5300 AMOLED display, CST9217 touch controller, 16 MB flash and 8 MB PSRAM.
+The supported [Waveshare board on Amazon](https://www.amazon.co.uk/dp/B0F7XTJ7JW) has a round 466 x 466 CO5300 AMOLED display, CST9217 touch controller, 16 MB flash and 8 MB PSRAM.
 
 The device renders native LVGL graphics; it does not run the web app.
 

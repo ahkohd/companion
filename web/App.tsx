@@ -68,6 +68,8 @@ export default function App() {
   const action:Action=async(path,payload,message)=>{const saved=await bridgeAction(path,payload,message);if(saved&&['select','module','expression'].includes(path))setLocalAnimation(undefined);return saved}
   const [help,setHelp] = useState(false)
   useEffect(()=>{ const onHash=()=>setPage(readPage()); window.addEventListener('hashchange',onHash); return ()=>window.removeEventListener('hashchange',onHash) },[])
+  const deviceConnected = online && snapshot?.device.status === 'connected'
+  const connectionLabel = !online ? 'Connecting' : deviceConnected ? 'Connected' : 'Device disconnected'
   const appearance = snapshot?.settings.appearance
   useEffect(()=>{
     const query=matchMedia('(prefers-color-scheme: dark)')
@@ -87,8 +89,8 @@ export default function App() {
       <div className="sidebar-bottom"><button className="help-button" onClick={()=>setHelp(true)}><CircleHelp size={17}/>Quick guide<ArrowUpRight size={14}/></button><a href="#app-settings" className={`nav-link sidebar-settings ${page==='app-settings'?'active':''}`} aria-label="Settings" aria-current={page==='app-settings'?'page':undefined}><Settings2 size={18}/><span>Settings</span></a><div className="sidebar-version">Companion <span>v{appVersion}</span></div></div>
     </aside>
     <div className="main-shell">
-      <header className="topbar"><div className="breadcrumb">Workspace<ChevronRight size={13}/><span>{current.label}</span></div><div className="topbar-actions"><div className="topbar-status"><StatusDot state={online?'done':'idle'}/>{online?'Bridge connected':'Connecting to bridge'}</div><div className="theme-controls" role="group" aria-label="Colour theme"><button aria-label="Use light theme" aria-pressed={appearance?.theme==='light'} disabled={pending||!online} onClick={()=>void save({appearance:{theme:'light'}})}><Sun size={14}/></button><button aria-label="Use dark theme" aria-pressed={appearance?.theme==='dark'} disabled={pending||!online} onClick={()=>void save({appearance:{theme:'dark'}})}><Moon size={14}/></button></div></div></header>
-      {!online&&snapshot&&<div className="offline-banner" role="status"><Unplug size={16}/>The bridge is reconnecting. Showing the last received state. Changes are paused.</div>}
+      <header className="topbar"><div className="breadcrumb">Workspace<ChevronRight size={13}/><span>{current.label}</span></div><div className="topbar-actions"><div className="topbar-status" role="status"><StatusDot state={deviceConnected?'done':'idle'}/>{connectionLabel}</div><div className="theme-controls" role="group" aria-label="Colour theme"><button aria-label="Use light theme" aria-pressed={appearance?.theme==='light'} disabled={pending||!online} onClick={()=>void save({appearance:{theme:'light'}})}><Sun size={14}/></button><button aria-label="Use dark theme" aria-pressed={appearance?.theme==='dark'} disabled={pending||!online} onClick={()=>void save({appearance:{theme:'dark'}})}><Moon size={14}/></button></div></div></header>
+      {!online&&snapshot&&<div className="offline-banner" role="status"><Unplug size={16}/>Reconnecting to Companion. Showing the last received state. Changes are paused.</div>}
       <main id="main" tabIndex={-1} className="main-content">
         <div className="page-heading"><div><h1>{current.label}</h1>{current.description&&<p>{current.description}</p>}</div>{page!=='app-settings'&&<Badge variant="outline" className="device-badge"><Cpu size={13}/>{snapshot?.device.profile ? `${snapshot.device.profile.display.width} x ${snapshot.device.profile.display.height}` : '1.75" AMOLED'}</Badge>}</div>
         {page==='app-settings'?<AppSettings/>:page==='logs'?<Logs/>:page==='designer'&&snapshot?<Designer snapshot={snapshot} online={online} pending={pending} action={action}/>:<div className="content-grid"><div className="page-content">

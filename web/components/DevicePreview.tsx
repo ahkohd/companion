@@ -233,7 +233,6 @@ export default function DevicePreview({ snapshot, localAnimation, localReplay = 
   const enabled = snapshot?.settings.device.moduleOrder.filter((id): id is ModuleId =>
     moduleIds.includes(id as ModuleId) && snapshot.settings.modules[id as ModuleId].enabled) ?? ['face']
   const moduleIndex = enabled.indexOf(module)
-  const deviceConnected = online && snapshot?.device.status === 'connected'
   const display = snapshot?.display
   const semanticState = local ? (localAnimation?.startsWith('grok:') ? 'idle' : localAnimation || 'idle') : online ? display?.state || 'disconnected' : 'disconnected'
   const animation = local ? localAnimation?.startsWith('grok:') ? localAnimation : null : online ? display?.animation : null
@@ -284,7 +283,6 @@ export default function DevicePreview({ snapshot, localAnimation, localReplay = 
   return <section className="device-preview" aria-labelledby={titleId}>
     <header className="dp-heading">
       <h2 id={titleId}>Device preview</h2>
-      <span className="dp-connection" data-connected={deviceConnected}><i aria-hidden="true" />{deviceConnected ? 'Connected' : 'Not connected'}</span>
     </header>
 
     <div className="dp-stage">
