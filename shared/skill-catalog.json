@@ -1,0 +1,6 @@
+[
+  {
+    "name": "companion-attention",
+    "description": "Send notifications and decision requests to Companion, then read the response."
+  }
+]

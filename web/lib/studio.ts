@@ -39,7 +39,7 @@ export const statusDescriptions: Record<Status,string> = {working:'An agent is w
 export const boxes = {imbox:'Imbox',feed:'The Feed',paperTrail:'Paper Trail',replyLater:'Reply Later',screener:'Screener'}
 export const originals = ['working','blocked','done','idle','sleep'].map(id => ({id,label:statusNames[id],group:'Originals',source:''}))
 export const animations = [...originals,...catalog]
-export const animationName = (id: string | null) => id ? animations.find(a => a.id === id)?.label ?? id : 'Original animation'
+export const animationName = (id: string | null) => id ? animations.find(a => a.id === id)?.label ?? id : 'Default'
 export function relativeTime(at: number | null | undefined) {
   if (!at) return 'Not refreshed yet'
   const seconds = Math.max(0,Math.floor((Date.now()-at)/1000))

@@ -31,7 +31,7 @@ test('HTTP and SSE serve real state, restrict writes and shut down cleanly', { t
     device: { activeModule: 'face', moduleOrder: [...MODULE_IDS], followMouse: false },
     modules: { face: { enabled: true }, usage: { enabled: false }, hey: { enabled: false }, clock: { enabled: false } },
   })));
-  const child = spawn(process.execPath, ['bridge/server.mjs'], { env: { ...process.env, PATH: directory + path.delimiter + process.env.PATH, HERDR_SOCKET_PATH: socketPath, ESP_SERIAL_PORT: '', DISPLAY_SETTINGS_PATH: path.join(directory, 'display.json'), STUDIO_SETTINGS_PATH: studioPath, PORT: '0' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, ['bridge/server.mjs'], { env: { ...process.env, COMPANION_INSTALL_HOME: directory, PATH: directory + path.delimiter + process.env.PATH, HERDR_SOCKET_PATH: socketPath, ESP_SERIAL_PORT: '', DISPLAY_SETTINGS_PATH: path.join(directory, 'display.json'), STUDIO_SETTINGS_PATH: studioPath, PORT: '0' }, stdio: ['ignore', 'pipe', 'pipe'] });
   let logs = ''; child.stderr.on('data', chunk => { logs += chunk; });
   t.after(async () => {
     if (child.exitCode === null) { const exited = once(child, 'exit'); child.kill('SIGTERM'); await exited; }
@@ -43,6 +43,19 @@ test('HTTP and SSE serve real state, restrict writes and shut down cleanly', { t
   const logResponse = await fetch(base + '/api/logs'); assert.equal(logResponse.status, 200);
   const diagnostics = await logResponse.json(); assert.equal(typeof diagnostics.sessionId, 'string'); assert.ok(diagnostics.entries.some(entry => entry.message.startsWith('Companion:')));
   assert.equal((await fetch(base + '/api/logs', { method: 'POST' })).status, 404);
+  const installationState = await (await fetch(base + '/api/installations')).json();
+  assert.equal(installationState.cli.status, 'missing');
+  assert.equal(installationState.skills.directory, path.join(directory, '.agents/skills'));
+  const install = (value, headers = {}) => fetch(base + '/api/installations', { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(value) });
+  assert.equal((await install({ action: 'skills.install', name: 'companion-attention' }, { Origin: 'https://example.com' })).status, 403);
+  assert.equal((await install({ action: 'cli.install' }, { 'Content-Type': 'text/plain' })).status, 415);
+  assert.equal((await install({ action: 'unknown' })).status, 400);
+  const installedSkill = await install({ action: 'skills.install', name: 'companion-attention' });
+  assert.equal(installedSkill.status, 200);
+  assert.equal((await installedSkill.json()).skills.items[0].status, 'installed');
+  const removedSkill = await install({ action: 'skills.uninstall', name: 'companion-attention' });
+  assert.equal(removedSkill.status, 200);
+  assert.equal((await removedSkill.json()).skills.items[0].status, 'missing');
   const stream = await fetch(base + '/api/events'); const reader = stream.body.getReader();
   let streamText = '';
   while (!streamText.includes('Test agent')) streamText += new TextDecoder().decode((await reader.read()).value);

@@ -55,7 +55,7 @@ export async function bundleDependencies(root, destination, packages = runtimePa
 export async function bundleRuntime({ root, resources, node, run, arch }) {
   const runtime = path.join(resources, 'runtime');
   await mkdir(runtime, { recursive: true });
-  for (const entry of ['bridge', 'shared', 'dist', 'package.json', 'LICENSE']) {
+  for (const entry of ['bridge', 'shared', 'skills', 'dist', 'package.json', 'LICENSE']) {
     await cp(path.join(root, entry), path.join(runtime, entry), { recursive: true, dereference: true, filter: source => !['.ignored', '.vite-temp'].includes(path.basename(source)) });
   }
   const packages = await bundleDependencies(root, path.join(runtime, 'node_modules'));

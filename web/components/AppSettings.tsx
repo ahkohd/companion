@@ -1,4 +1,5 @@
 import CompanionMark from './CompanionMark'
+import Installations from './Installations'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowUpRight, CircleHelp, RefreshCw } from 'lucide-react'
 import { Button } from './ui/button'
@@ -104,6 +105,7 @@ export default function AppSettings() {
       <Row title="Automatically download updates" description="Download available updates so they are ready to install."><Switch aria-label="Automatically download updates" checked={!!state?.automaticallyDownloadsUpdates} disabled={updatesDisabled} onCheckedChange={value => void perform('automaticallyDownloadsUpdates', value)}/></Row>
       <Row title="Check for updates" description={state?.available && !state.updatesAvailable ? 'Software updates are unavailable in this local build.' : 'Check for a new version of Companion now.'}><Button variant="outline" disabled={updatesDisabled} onClick={() => void perform('checkForUpdates')}><RefreshCw size={14}/>{pending === 'checkForUpdates' ? 'Checking...' : 'Check now'}</Button></Row>
     </section>
+    <Installations/>
     <section className="panel" aria-labelledby="app-about-title">
       <div className="app-settings-about"><CompanionMark/><div><h2 id="app-about-title">Companion</h2><p>{state?.version ? `Version ${state.version}` : 'Your little desktop companion.'}</p></div><Button variant="ghost" disabled={disabled} onClick={() => void perform('about')}>About<ArrowUpRight size={14}/></Button></div>
     </section>

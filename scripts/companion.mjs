@@ -1,14 +1,38 @@
 #!/usr/bin/env node
 import { readFile, realpath } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { Installations } from '../bridge/installations.mjs';
 import catalog from '../shared/grok-catalog.json' with { type: 'json' };
 
-export async function run(args, { out = value => console.log(JSON.stringify(value)), fetcher = fetch } = {}) {
+export async function run(args, { out = value => console.log(JSON.stringify(value)), fetcher = fetch, installations = new Installations() } = {}) {
   const [command = 'help', ...rest] = args;
   if (command === 'help' || command === '--help') {
-    out({ usage: 'companion <show|update|clear|status|wait|animations> [--json file|-] [--id ID] [--owner OWNER] [--timeout seconds]',
+    out({ usage: 'companion <show|update|clear|status|wait|animations|skills> [--json file|-] [--id ID] [--owner OWNER] [--timeout seconds]',
+      skills: 'skills [list|path [name]|install <name>|install --all|uninstall <name>] [--directory PATH]. The directory is saved for future commands. Works offline.',
       examples: ['companion show --json request.json', 'companion wait --id MESSAGE_ID --timeout 300', 'companion clear --id MESSAGE_ID --owner my-agent'],
       note: 'JSON output. wait exits 2 on timeout or a missing result; neither means approval. COMPANION_URL defaults to http://127.0.0.1:4317.' }); return 0;
+  }
+  if (command === 'skills') {
+    const positional = [];
+    let directory;
+    for (let i = 0; i < rest.length; i++) {
+      if (rest[i] === '--directory') {
+        if (directory !== undefined || !rest[i + 1] || rest[i + 1].startsWith('--')) throw new Error('--directory requires a path.');
+        directory = rest[++i];
+      } else positional.push(rest[i]);
+    }
+    const [action = 'list', name, ...extra] = positional;
+    if (extra.length || !['list', 'path', 'install', 'uninstall'].includes(action) || (action === 'list' && name) || (['install', 'uninstall'].includes(action) && !name) || (action === 'uninstall' && name === '--all')) throw new Error('Use skills [list|path [name]|install <name>|install --all|uninstall <name>] [--directory PATH].');
+    if (directory !== undefined) await installations.change({ action: 'skills.directory', directory });
+    let state;
+    if (action === 'install' || action === 'uninstall') state = await installations.change({ action: name === '--all' ? 'skills.installAll' : `skills.${action}`, name });
+    else state = await installations.snapshot();
+    if (action === 'path') {
+      const item = name && state.skills.items.find(item => item.name === name);
+      if (name && !item) throw new Error(`Unknown skill: ${name}`);
+      out(item ? item.path : state.skills.directory);
+    } else out(state.skills);
+    return 0;
   }
   const options = {};
   for (let i = 0; i < rest.length; i += 2) {

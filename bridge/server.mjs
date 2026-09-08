@@ -1,3 +1,4 @@
+import { Installations } from './installations.mjs';
 import { AppSettings } from './app-settings.mjs';
 import { DiagnosticLogs, installConsoleLogs } from './logs.mjs';
 import { AttentionCallbacks } from './attention-callback.mjs';
@@ -20,6 +21,7 @@ import { openCard } from './open-card.mjs';
 
 const appSettings = new AppSettings(process.env.COMPANION_NATIVE_TOKEN);
 delete process.env.COMPANION_NATIVE_TOKEN;
+const installations = new Installations({ home: process.env.COMPANION_INSTALL_HOME || undefined });
 const logs = new DiagnosticLogs();
 const restoreConsole = installConsoleLogs(logs);
 const root = fileURLToPath(new URL('../dist/', import.meta.url));
@@ -89,7 +91,7 @@ const connection = new SerialConnection(store, { link: device, filePath: path.jo
 const streams = new Set();
 const send = (res, code, data) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2' };
-const writeRoutes = ['show', 'update', 'clear', 'act', 'details', 'dismiss', 'configure'].map(action => `/api/attention/${action}`).concat(['/api/app-settings', '/api/native/sync', '/api/select', '/api/expression', '/api/pointer', '/api/display', '/api/settings', '/api/module', '/api/modules/refresh', '/api/usage/page', '/api/hey/page', '/api/roon/control', '/api/roon/view', '/api/open-card', '/api/device/connection', '/api/device/refresh', '/api/device/reconnect']);
+const writeRoutes = ['show', 'update', 'clear', 'act', 'details', 'dismiss', 'configure'].map(action => `/api/attention/${action}`).concat(['/api/installations', '/api/app-settings', '/api/native/sync', '/api/select', '/api/expression', '/api/pointer', '/api/display', '/api/settings', '/api/module', '/api/modules/refresh', '/api/usage/page', '/api/hey/page', '/api/roon/control', '/api/roon/view', '/api/open-card', '/api/device/connection', '/api/device/refresh', '/api/device/reconnect']);
 const server = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
@@ -101,6 +103,10 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
     res.write(`data: ${JSON.stringify(store.snapshot())}\n\n`); streams.add(res);
     req.on('close', () => streams.delete(res)); return;
+  }
+  if (url.pathname === '/api/installations' && req.method === 'GET') {
+    try { return send(res, 200, await installations.snapshot()); }
+    catch (error) { return send(res, 500, { error: error.message }); }
   }
   if (url.pathname === '/api/app-settings' && req.method === 'GET') return send(res, 200, appSettings.snapshot());
   if (url.pathname === '/api/logs' && req.method === 'GET') return send(res, 200, logs.snapshot());
@@ -125,6 +131,7 @@ const server = http.createServer(async (req, res) => {
       const request = JSON.parse(body);
       if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('Send a JSON object.');
       if (url.pathname === '/api/native/sync') return send(res, 200, appSettings.sync(request));
+      if (url.pathname === '/api/installations') return send(res, 200, await installations.change(request));
       if (url.pathname === '/api/app-settings') return send(res, 200, await appSettings.change(request));
       if (url.pathname === '/api/modules/refresh') {
         await sources.refresh(request.id);

@@ -6,8 +6,6 @@ Companion is tested on the [Waveshare ESP32-S3-Touch-AMOLED-1.75-B](https://www.
 
 ![Overview showing sample agent statuses beside the device preview](docs/images/overview.png)
 
-Version 0.1.0. Screenshots show the app with sample data.
-
 ## What you can do
 
 Choose from 5 modules:
@@ -20,7 +18,7 @@ Choose from 5 modules:
 | Clock | Time and an optional weekday | No additional service |
 | Roon | Album artwork, track details and playback controls | A Roon server with the Companion extension enabled |
 
-The app detects installed CodexBar and HEY CLIs. Herdr Face, CodexBar, HEY and Clock start enabled. Roon starts disabled.
+The app detects installed CodexBar and HEY CLIs. Herdr Face, CodexBar, HEY and Clock start enabled.
 
 Enable the modules you want on the Modules page. Swipe left or right to switch between them. You can change their order.
 
@@ -30,13 +28,22 @@ Attention lets an agent temporarily show a face, a message and a choice over you
 
 Notifications expire after 10 seconds of visible time. Decision requests stay until answered or cleared. Reading the detail pauses a notification's timer. Requests queue so agents cannot overwrite each other's messages.
 
-Use the Attention page to send a preview, manage the queue or turn interruptions off. Install the local agent command and skill with:
+Use the Attention page to send a preview, manage the queue or turn interruptions off. Open **Settings > Command line** to install the `companion` command, then **Agent skills** to install `companion-attention`.
+
+The CLI and skills are bundled with the app and install offline. Settings shows installation status and offers Update and Uninstall. Existing files and edited installations are preserved.
 
 ```sh
-node scripts/install-attention.mjs
+companion skills
+companion skills path
+companion skills path companion-attention
+companion skills install companion-attention
+companion skills install --all
+companion skills uninstall companion-attention
 ```
 
-Add a reference to `skills/companion-attention/SKILL.md` in your agent instructions. The [attention skill](skills/companion-attention/SKILL.md) covers notifications, decisions, chained screens and waiting for a response. Keep this checkout in place while using the installed links.
+Skills default to `~/.agents/skills`. Change the destination in Settings or use `companion skills --directory /your/skills/path`. The CLI installs to `~/.local/bin/companion`; Settings tells you if that directory needs adding to your shell's PATH.
+
+Add a reference to the installed `SKILL.md` in your agent instructions. The [attention skill](skills/companion-attention/SKILL.md) covers notifications, decisions, chained screens and waiting for a response. Keep Companion in its installed location. Development installs depend on this checkout and its Node runtime.
 
 The queue and recent responses are held in memory. Restarting the bridge clears them. A timeout or missing request never counts as approval.
 
