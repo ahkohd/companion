@@ -55,6 +55,13 @@ jobs:
         id: prepare
         run: node scripts/release/prepare.mjs
       - run: pnpm install --frozen-lockfile
+      - name: Fetch firmware test dependency
+        uses: actions/checkout@v4
+        with:
+          repository: DaveGamble/cJSON
+          ref: b2890c8d76bbb64e710585ebc0a917196b9c67e7
+          path: .tools/esp-idf/components/json/cJSON
+          persist-credentials: false
       - run: pnpm check
       - name: Fetch verified release dependencies
         run: node scripts/release/fetch-dependencies.mjs
