@@ -137,9 +137,10 @@ jobs:
           set -euo pipefail
           test -n "$R2_BUCKET"
           ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          EXISTING=$(aws s3api list-objects-v2 --bucket "$R2_BUCKET" --prefix "$PREFIX/Companion-$VERSION-arm64.zip" --endpoint-url "$ENDPOINT" --query KeyCount --output text)
+          EXISTING=$(aws s3api list-objects-v2 --no-paginate --max-keys 1 --bucket "$R2_BUCKET" --prefix "$PREFIX/Companion-$VERSION-arm64.zip" --endpoint-url "$ENDPOINT" --query KeyCount --output text)
+          echo "Existing archives: $EXISTING"
           test "$EXISTING" = 0 || { echo 'Version already exists; choose a new version.' >&2; exit 1; }
-          FEEDS=$(aws s3api list-objects-v2 --bucket "$R2_BUCKET" --prefix "$PREFIX/appcast.xml" --endpoint-url "$ENDPOINT" --query KeyCount --output text)
+          FEEDS=$(aws s3api list-objects-v2 --no-paginate --max-keys 1 --bucket "$R2_BUCKET" --prefix "$PREFIX/appcast.xml" --endpoint-url "$ENDPOINT" --query KeyCount --output text)
           if [ "$FEEDS" != 0 ]; then
             aws s3 cp "s3://$R2_BUCKET/$PREFIX/appcast.xml" previous-appcast.xml --endpoint-url "$ENDPOINT"
             python3 - <<'PYTHON'
