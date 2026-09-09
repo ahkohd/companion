@@ -29,6 +29,8 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var logHandle: FileHandle?
     var timer: Timer?
     var terminationSignal: DispatchSourceSignal?
+    var quitPulse: Timer?
+    var statusSpinner: NSProgressIndicator?
     var polling = false
     var quitting = false
     var restarting = false
@@ -63,7 +65,7 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         status.isEnabled = true
         status.target = self
         status.action = #selector(openDevice)
-        status.image = menuIcon("cable.connector")
+        showBusyStatus("Starting Companion...")
         menu.addItem(status)
         menu.addItem(.separator())
         for (title, action, key) in [("Dashboard", #selector(openDashboard), "o"), ("Logs", #selector(openLogs), "l")] {
@@ -117,7 +119,39 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
                 Task { @MainActor in await self?.poll() }
             }
-        } catch { status.title = "Setup failed"; status.toolTip = error.localizedDescription }
+        } catch { clearBusyStatus(); status.title = "Setup failed"; status.toolTip = error.localizedDescription }
+    }
+
+    func showBusyStatus(_ title: String) {
+        if statusSpinner != nil && status.title == title { return }
+        clearBusyStatus()
+        status.title = title
+        status.image = nil
+        let row = NSView(frame: NSRect(x: 0, y: 0, width: 250, height: 26))
+        let spinner = NSProgressIndicator(frame: NSRect(x: 14, y: 5, width: 16, height: 16))
+        spinner.style = .spinning
+        spinner.controlSize = .small
+        spinner.isIndeterminate = true
+        spinner.isDisplayedWhenStopped = false
+        spinner.usesThreadedAnimation = true
+        let label = NSTextField(labelWithString: title)
+        label.font = .menuFont(ofSize: 0)
+        label.textColor = quitting ? .disabledControlTextColor : .labelColor
+        label.frame = NSRect(x: 38, y: 4, width: 204, height: 18)
+        row.addSubview(spinner)
+        row.addSubview(label)
+        row.setAccessibilityElement(true)
+        row.setAccessibilityLabel(title)
+        status.view = row
+        statusSpinner = spinner
+        spinner.startAnimation(nil)
+        item.button?.toolTip = title
+    }
+
+    func clearBusyStatus() {
+        statusSpinner?.stopAnimation(nil)
+        statusSpinner = nil
+        status.view = nil
     }
 
     func menuIcon(_ symbol: String) -> NSImage? {
@@ -148,6 +182,7 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard FileManager.default.isExecutableFile(atPath: config.node),
               FileManager.default.fileExists(atPath: config.root + "/dist/index.html"),
               FileManager.default.fileExists(atPath: config.root + "/bridge/server.mjs") else {
+            clearBusyStatus()
             status.title = "Companion needs setup"
             status.toolTip = "Rebuild the app from your project folder"
             return
@@ -181,17 +216,18 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             try process.run()
             child = process
             startedAt = Date()
-            status.title = "Starting Companion..."
+            showBusyStatus("Starting Companion...")
             status.toolTip = "Connecting to your device"
-        } catch { status.title = "Could not start Companion"; status.toolTip = error.localizedDescription }
+        } catch { clearBusyStatus(); status.title = "Could not start Companion"; status.toolTip = error.localizedDescription }
     }
 
     func exited(_ code: Int32) {
         child = nil
-        if quitting { NSApp.reply(toApplicationShouldTerminate: true); return }
+        if quitting { quitPulse?.invalidate(); NSApp.reply(toApplicationShouldTerminate: true); return }
         if restarting { start(); return }
         if Date().timeIntervalSince(startedAt) > 60 { failures = 0 }
         failures += 1
+        clearBusyStatus()
         status.title = "Bridge stopped (\(code))"
         status.toolTip = failures <= 3 ? "Restarting shortly..." : "Check Logs or restart to try again"
         if failures <= 3 {
@@ -212,7 +248,10 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         polling = true
         defer { polling = false }
         if child != nil { await syncAppSettings() }
-        if let json = await state(), let device = json["device"] as? [String: Any] {
+        let snapshot = await state()
+        guard !quitting else { return }
+        if let json = snapshot, let device = json["device"] as? [String: Any] {
+            clearBusyStatus()
             if child == nil { external = true }
             let connected = device["status"] as? String == "connected"
             let error = device["error"] as? String
@@ -226,10 +265,11 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else if external {
             external = false
             start()
-        } else if child != nil { status.title = "Connecting to bridge..." }
+        } else if child != nil { showBusyStatus("Starting Companion...") }
     }
 
     func menuWillOpen(_ menu: NSMenu) {
+        guard !quitting else { return }
         #if SPARKLE
         updatesItem.isEnabled = updater.updater.canCheckForUpdates
         #endif
@@ -276,6 +316,7 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if child != nil { restarting = true; stopChild() } else { start() }
     }
     func syncAppSettings() async {
+        guard !quitting else { return }
         var state: [String: Any] = [
             "version": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown",
             "launchAtLogin": SMAppService.mainApp.status == .enabled,
@@ -297,6 +338,7 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               (response as? HTTPURLResponse)?.statusCode == 200,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        guard !quitting else { return }
         guard let command = json["command"] as? [String: Any], let id = command["id"] as? String,
               let action = command["action"] as? String else { return }
         if nativeResult?["id"] as? String == id { return }
@@ -323,15 +365,29 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     @objc func quitApp() { NSApp.terminate(nil) }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if quitting { return child?.isRunning == true ? .terminateLater : .terminateNow }
         quitting = true
         timer?.invalidate()
-        if let child, child.isRunning {
-            child.terminate()
-            let deadline = Date().addingTimeInterval(5)
-            while child.isRunning && Date() < deadline { Thread.sleep(forTimeInterval: 0.05) }
-            if child.isRunning { kill(child.processIdentifier, SIGKILL) }
+        showBusyStatus("Quitting Companion...")
+        status.toolTip = "Closing the device connection and background services"
+        item.button?.toolTip = status.title
+        item.button?.setAccessibilityLabel(status.title)
+        for entry in item.menu?.items ?? [] { entry.isEnabled = false }
+        guard let child, child.isRunning else { return .terminateNow }
+        if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            let started = Date()
+            let pulse = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    let phase = Date().timeIntervalSince(started) * .pi * 2 / 1.2
+                    self?.item.button?.alphaValue = 0.7 + 0.3 * cos(phase)
+                }
+            }
+            quitPulse = pulse
+            RunLoop.main.add(pulse, forMode: .common)
         }
-        return .terminateNow
+        // Keep AppKit responsive until the process termination handler replies.
+        stopChild()
+        return .terminateLater
     }
 }
 
