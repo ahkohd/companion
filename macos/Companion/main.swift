@@ -116,9 +116,11 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             logHandle = try FileHandle(forWritingTo: logURL)
             logHandle?.seekToEndOfFile()
             Task { await bootstrap() }
-            timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
+            let statusTimer = Timer(timeInterval: 3, repeats: true) { [weak self] _ in
                 Task { @MainActor in await self?.poll() }
             }
+            timer = statusTimer
+            RunLoop.main.add(statusTimer, forMode: .common)
         } catch { clearBusyStatus(); status.title = "Setup failed"; status.toolTip = error.localizedDescription }
     }
 
@@ -136,7 +138,7 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         spinner.usesThreadedAnimation = true
         let label = NSTextField(labelWithString: title)
         label.font = .menuFont(ofSize: 0)
-        label.textColor = quitting ? .disabledControlTextColor : .labelColor
+        label.textColor = .disabledControlTextColor
         label.frame = NSRect(x: 38, y: 4, width: 204, height: 18)
         row.addSubview(spinner)
         row.addSubview(label)
@@ -210,7 +212,9 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         process.standardError = logHandle
         process.terminationHandler = { [weak self] process in
             let code = process.terminationStatus
-            Task { @MainActor in self?.exited(code) }
+            RunLoop.main.perform(inModes: [.common]) {
+                MainActor.assumeIsolated { self?.exited(code) }
+            }
         }
         do {
             try process.run()
@@ -238,7 +242,7 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func stopChild() {
         guard let process = child, process.isRunning else { return }
         process.terminate()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 5) {
             if process.isRunning { kill(process.processIdentifier, SIGKILL) }
         }
     }
