@@ -6,6 +6,8 @@ node_modules/
 
 # Build output and test coverage
 /dist/
+/landing-dist/
+/docs/images/.capture-*/
 /coverage/
 *.tsbuildinfo
 /firmware/build/

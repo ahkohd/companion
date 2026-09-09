@@ -1,0 +1,86 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "deviceScaleFactor": 2,
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "sampleTime": "2026-09-09T16:20:00.000Z",
+  "screenshots": [
+    {
+      "name": "overview",
+      "theme": "light",
+      "deviceTheme": "light",
+      "filename": "overview-light.png",
+      "width": 2880,
+      "height": 2000,
+      "sha256": "ab2665b305d7ed3bfb3ea215899c01fea59484500f5e82a893f30fd51863a462"
+    },
+    {
+      "name": "designer",
+      "theme": "light",
+      "deviceTheme": "light",
+      "filename": "designer-light.png",
+      "width": 2880,
+      "height": 2000,
+      "sha256": "1f66f310988723d6d23b3ae041a6e5268f4421ec931322859720ab4e3510c547"
+    },
+    {
+      "name": "modules",
+      "theme": "light",
+      "deviceTheme": "light",
+      "filename": "modules-light.png",
+      "width": 2880,
+      "height": 2000,
+      "sha256": "ece76a029bef015c9ade71b6d8bcf3f513fe824300634fd4c85ef334b38be8bf"
+    },
+    {
+      "name": "animations",
+      "theme": "light",
+      "deviceTheme": "light",
+      "filename": "animations-light.png",
+      "width": 2880,
+      "height": 2000,
+      "sha256": "4ff7a6b141b7b3741dff5b4ec222f5ecb700e3b257411ba56c6b894b9225bd00"
+    },
+    {
+      "name": "overview",
+      "theme": "dark",
+      "deviceTheme": "dark",
+      "filename": "overview-dark.png",
+      "width": 2880,
+      "height": 2000,
+      "sha256": "39a3c50b231b2a373d1d46786bbf2904e80836d303a2275eb5a5c978198dbd87"
+    },
+    {
+      "name": "designer",
+      "theme": "dark",
+      "deviceTheme": "dark",
+      "filename": "designer-dark.png",
+      "width": 2880,
+      "height": 2000,
+      "sha256": "2f2386096541f2dd385b2d4cd5d104c1b32a6faecfccbd16b784e231f0160198"
+    },
+    {
+      "name": "modules",
+      "theme": "dark",
+      "deviceTheme": "dark",
+      "filename": "modules-dark.png",
+      "width": 2880,
+      "height": 2000,
+      "sha256": "ed4895f987d2c5a309081cc329d36fa620b1fc2b4cfa1e09c3fd1cc730ee116f"
+    },
+    {
+      "name": "animations",
+      "theme": "dark",
+      "deviceTheme": "dark",
+      "filename": "animations-dark.png",
+      "width": 2880,
+      "height": 2000,
+      "sha256": "8fef884ba8a66ac1bf0c125b0598d439db2a9222d856146f7f98840b39b9ce18"
+    }
+  ]
+}

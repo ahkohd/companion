@@ -1,0 +1,9 @@
+{
+  "name": "companion-landing",
+  "account_id": "73182c5ab5d538b2a69272d1fbb86eed",
+  "compatibility_date": "2026-09-10",
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": { "directory": "../../landing-dist" },
+  "routes": [{ "pattern": "companion.victor.computer", "custom_domain": true }]
+}

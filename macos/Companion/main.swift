@@ -123,7 +123,7 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         menu.addItem(.separator())
         restartItem.image = menuIcon("arrow.clockwise")
-        restartItem.keyEquivalentModifierMask = [.command, .shift]
+        restartItem.keyEquivalentModifierMask = [.command]
         restartItem.target = self
         menu.addItem(restartItem)
         menu.addItem(.separator())

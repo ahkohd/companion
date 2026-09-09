@@ -2,9 +2,13 @@
 
 Follow your coding agents, check AI usage and control a small desktop display from a local web app.
 
+[Website and download](https://companion.victor.computer)
+
 Companion is tested on the [Waveshare ESP32-S3-Touch-AMOLED-1.75-B](https://www.amazon.co.uk/dp/B0F7XTJ7JW). Have a different board? Explore [potential ports](#hardware-compatibility) or [contribute a board profile](docs/adding-a-board.md). You can also use the browser preview without a device.
 
 ![Overview showing sample agent statuses beside the device preview](docs/images/overview.png)
+
+To refresh the README images or build the website, see [landing page and screenshot commands](docs/landing-page.md).
 
 ## What you can do
 

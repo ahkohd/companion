@@ -1,6 +1,6 @@
 {
   "name": "companion",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,6 +10,11 @@
     "test": "node scripts/ensure-grok-clips.mjs && node scripts/build-face-profiles.mjs --check && node --test test/*.test.mjs scripts/grok-source/capture.test.mjs web/components/face/face-timeline.test.mjs",
     "animations:generate": "node scripts/build-grok-clips.mjs",
     "faces:generate": "node scripts/build-face-profiles.mjs",
+    "screenshots": "pnpm build && node scripts/screenshots/capture.mjs",
+    "screenshots:preview": "pnpm build && node scripts/screenshots/server.mjs",
+    "landing:build": "pnpm screenshots && node scripts/landing/build.mjs",
+    "landing:preview": "node scripts/landing/preview.mjs",
+    "landing:deploy": "pnpm landing:build && pnpm dlx wrangler@4.98.0 deploy --config infra/landing/wrangler.jsonc",
     "fonts:generate": "node scripts/build-fonts.mjs",
     "check": "pnpm test && pnpm run build",
     "firmware:setup": "bash scripts/setup-firmware.sh",
@@ -46,6 +51,7 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6",
     "lv_font_conv": "1.5.3",
+    "playwright": "1.63.0",
     "typescript": "5.9.3",
     "vite": "8.2.1"
   },
