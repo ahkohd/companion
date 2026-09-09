@@ -4,6 +4,33 @@ import ServiceManagement
 import Sparkle
 #endif
 
+#if SPARKLE
+final class GentleUpdateDriver: NSObject, SPUStandardUserDriverDelegate {
+    var availabilityChanged: (@MainActor (Bool) -> Void)?
+    var supportsGentleScheduledUpdateReminders: Bool { true }
+
+    func standardUserDriverShouldHandleShowingScheduledUpdate(
+        _ update: SUAppcastItem, andInImmediateFocus immediateFocus: Bool
+    ) -> Bool { false }
+
+    func standardUserDriverWillHandleShowingUpdate(
+        _ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem,
+        state: SPUUserUpdateState
+    ) {
+        guard !handleShowingUpdate else { return }
+        DispatchQueue.main.async { self.availabilityChanged?(true) }
+    }
+
+    func standardUserDriverWillFinishUpdateSession() {
+        DispatchQueue.main.async { self.availabilityChanged?(false) }
+    }
+
+    func standardUserDriverDidReceiveUserAttention(forUpdate update: SUAppcastItem) {
+        DispatchQueue.main.async { self.availabilityChanged?(false) }
+    }
+}
+#endif
+
 struct Configuration: Decodable {
     var root: String
     var node: String
@@ -20,10 +47,14 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let nativeToken = UUID().uuidString + UUID().uuidString
     var nativeResult: [String: Any]?
     let updatesItem = NSMenuItem(title: "Check for Updates...", action: #selector(checkForUpdates), keyEquivalent: "")
+    let updateReminder = NSMenuItem(title: "A new update is available...", action: #selector(checkForUpdates), keyEquivalent: "")
+    let updateSeparator = NSMenuItem.separator()
+    var updateBadge: NSView?
     var config: Configuration!
     var dataFolder: URL?
     #if SPARKLE
-    let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+    let updateDriver = GentleUpdateDriver()
+    lazy var updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: updateDriver)
     #endif
     var child: Process?
     var logHandle: FileHandle?
@@ -46,22 +77,37 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         terminationSignal?.setEventHandler { NSApp.terminate(nil) }
         terminationSignal?.resume()
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
-            NSColor.black.setFill()
-            for (x, y, height) in [(4.8, 8.0, 9.0), (12.7, 10.0, 8.0)] {
-                let eye = NSBezierPath(roundedRect: NSRect(x: -1.575, y: -height / 2, width: 3.15, height: height), xRadius: 1.575, yRadius: 1.575)
-                let tilt = AffineTransform(rotationByDegrees: 16)
-                eye.transform(using: tilt)
-                eye.transform(using: AffineTransform(translationByX: x, byY: y))
-                eye.fill()
-            }
-            return true
-        }
+        item.button?.image = Self.menuBarImage()
         item.button?.setAccessibilityLabel("Companion")
-        item.button?.image?.isTemplate = true
+        if let button = item.button {
+            let dot = NSView()
+            dot.wantsLayer = true
+            dot.layer?.backgroundColor = NSColor.systemOrange.cgColor
+            dot.layer?.cornerRadius = 2.5
+            dot.isHidden = true
+            dot.translatesAutoresizingMaskIntoConstraints = false
+            button.addSubview(dot)
+            NSLayoutConstraint.activate([
+                dot.widthAnchor.constraint(equalToConstant: 5),
+                dot.heightAnchor.constraint(equalToConstant: 5),
+                dot.centerXAnchor.constraint(equalTo: button.centerXAnchor, constant: 7.5),
+                dot.centerYAnchor.constraint(equalTo: button.centerYAnchor, constant: -6.5)
+            ])
+            updateBadge = dot
+        }
         let menu = NSMenu()
         menu.delegate = self
         menu.autoenablesItems = false
+        updateReminder.target = self
+        updateReminder.image = NSImage(size: NSSize(width: 16, height: 16), flipped: false) { _ in
+            NSColor.systemOrange.setFill()
+            NSBezierPath(ovalIn: NSRect(x: 5, y: 5, width: 6, height: 6)).fill()
+            return true
+        }
+        updateReminder.isHidden = true
+        updateSeparator.isHidden = true
+        menu.addItem(updateReminder)
+        menu.addItem(updateSeparator)
         status.isEnabled = true
         status.target = self
         status.action = #selector(openDevice)
@@ -97,6 +143,12 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         quit.target = self
         menu.addItem(quit)
         item.menu = menu
+        #if SPARKLE
+        updateDriver.availabilityChanged = { [weak self] available in
+            self?.setUpdateAvailable(available)
+        }
+        _ = updater
+        #endif
         do {
             let url = Bundle.main.url(forResource: "config", withExtension: "json")!
             config = try JSONDecoder().decode(Configuration.self, from: Data(contentsOf: url))
@@ -122,6 +174,35 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             timer = statusTimer
             RunLoop.main.add(statusTimer, forMode: .common)
         } catch { clearBusyStatus(); status.title = "Setup failed"; status.toolTip = error.localizedDescription }
+    }
+
+    static func menuBarImage(badged: Bool = false) -> NSImage {
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
+            NSColor.black.setFill()
+            for (x, y, height) in [(4.8, 8.0, 9.0), (12.7, 10.0, 8.0)] {
+                let eye = NSBezierPath(roundedRect: NSRect(x: -1.575, y: -height / 2, width: 3.15, height: height), xRadius: 1.575, yRadius: 1.575)
+                let tilt = AffineTransform(rotationByDegrees: 16)
+                eye.transform(using: tilt)
+                eye.transform(using: AffineTransform(translationByX: x, byY: y))
+                eye.fill()
+            }
+            if badged {
+                NSGraphicsContext.current?.compositingOperation = .destinationOut
+                NSBezierPath(ovalIn: NSRect(x: 13, y: 12, width: 7, height: 7)).fill()
+            }
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }
+
+    func setUpdateAvailable(_ available: Bool) {
+        guard !quitting else { return }
+        updateReminder.isHidden = !available
+        updateSeparator.isHidden = !available
+        updateBadge?.isHidden = !available
+        item.button?.image = Self.menuBarImage(badged: available)
+        item.button?.setAccessibilityLabel(available ? "Companion, update available" : "Companion")
     }
 
     func showBusyStatus(_ title: String) {
@@ -283,6 +364,7 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard !quitting else { return }
         #if SPARKLE
         updatesItem.isEnabled = updater.updater.canCheckForUpdates
+        updateReminder.isEnabled = updater.updater.canCheckForUpdates
         #endif
         restartItem.isEnabled = !external && !restarting && config != nil
     }
