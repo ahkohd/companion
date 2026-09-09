@@ -2,6 +2,11 @@ import { randomUUID, timingSafeEqual } from 'node:crypto';
 
 export class AppSettings {
   constructor(token) { this.token = token; this.updated = 0; this.state = {}; this.pending = null; }
+  stop() {
+    this.token = null;
+    const pending = this.pending; this.pending = null;
+    if (pending) { clearTimeout(pending.timer); pending.reject(Error('Companion is shutting down.')); }
+  }
   authorized(value) {
     if (!this.token || typeof value !== 'string') return false;
     const a = Buffer.from(value), b = Buffer.from(this.token);

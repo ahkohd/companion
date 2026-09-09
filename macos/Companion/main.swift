@@ -255,11 +255,18 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let snapshot = await state()
         guard !quitting else { return }
         if let json = snapshot, let device = json["device"] as? [String: Any] {
-            clearBusyStatus()
             if child == nil { external = true }
-            let connected = device["status"] as? String == "connected"
-            let error = device["error"] as? String
-            status.title = error == nil ? (connected ? "Device connected" : "Device disconnected") : "Device needs attention"
+            let deviceState = device["status"] as? String
+            let connected = deviceState == "connected"
+            let connection = device["connection"] as? [String: Any]
+            let error = device["error"] as? String ?? connection?["error"] as? String
+            if !connected && error == nil && (connection == nil || connection?["scanning"] as? Bool == true || deviceState == "connecting" || deviceState == "waiting") {
+                showBusyStatus("Connecting to device...")
+                return
+            }
+            clearBusyStatus()
+            let browserOnly = connection?["mode"] as? String == "off"
+            status.title = error == nil ? (connected ? "Device connected" : browserOnly ? "Browser only" : "Device disconnected") : "Device needs attention"
             status.toolTip = error ?? (external ? "Bridge managed outside this app" : "Companion is running")
             let symbol = error != nil ? "exclamationmark.triangle" : (connected ? "checkmark.circle.fill" : "cable.connector")
             let color: NSColor = error != nil ? .systemOrange : (connected ? .systemGreen : .secondaryLabelColor)

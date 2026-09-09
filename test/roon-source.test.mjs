@@ -112,3 +112,15 @@ test('failed artwork can retry without changing tracks and does not publish ever
   core.notify('Changed', { zones_seek_changed: [{ zone_id: 'zone1', seek_position: 6 }] }); assert.equal(core.images.length, 2);
   core.images[1].cb('NetworkError'); await source.artPromise;
 });
+
+test('disconnect terminates retained sockets after vendor close drops its references', async t => {
+  const { source, instances } = await fixture(t); await enable(source);
+  const api = instances[0]; let terminated = 0;
+  const connection = () => { const transport = { ws: { terminate() { terminated++; } }, close() { this.ws = undefined; } }; return { transport }; };
+  source.manual = connection();
+  api._sood_conns = { discovered: connection() };
+  api.disconnect_all = () => { for (const conn of Object.values(api._sood_conns)) conn.transport.close(); api._sood_conns = {}; };
+  source.stop();
+  assert.equal(terminated, 2);
+  source.stop(); assert.equal(terminated, 2);
+});

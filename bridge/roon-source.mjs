@@ -44,9 +44,16 @@ export class RoonSource extends EventEmitter {
     this.generation++; this.artGeneration++; clearTimeout(this.retry); clearTimeout(this.authTimer);
     this.core = null; this.zones.clear(); this.art = null; this.artKey = ''; this.artPromise = null; this.controlPending = false;
     const api = this.api, manual = this.manual; this.api = this.manual = null;
+    // The pinned Roon transport drops its ws reference when close() starts a
+    // graceful handshake. Retain it so shutdown does not wait for the peer.
+    const sockets = new Set([manual, ...Object.values(api?._sood_conns ?? {})]
+      .map(connection => connection?.transport?.ws).filter(Boolean));
     try { api?.stop_discovery(); } catch { /* An already closed discovery socket needs no further cleanup. */ }
     try { manual?.transport?.close(); } catch { /* Close is best effort during shutdown. */ }
     try { api?.disconnect_all(); } catch { /* Close is best effort during shutdown. */ }
+    for (const socket of sockets) {
+      try { socket.terminate?.(); } catch { /* Already closed. */ }
+    }
   }
   async loadPairing() {
     try { if ((await stat(this.pairingPath)).size > 65536) throw Error('oversize'); const value = JSON.parse(await readFile(this.pairingPath, 'utf8')); return value && typeof value === 'object' && !Array.isArray(value) ? value : {}; }

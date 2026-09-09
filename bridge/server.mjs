@@ -195,5 +195,5 @@ server.listen(port, '127.0.0.1', () => {
   void connection.start().catch(error => store.setDevice({ status: 'disconnected', error: error.message })); void sources.start(); void roon.start();
 });
 server.on('error', error => { console.error(error.message); shutdown(); process.exitCode = 1; });
-function shutdown() { if (closing) return; closing = true; listening = false; clearInterval(keepAlive); clearInterval(clockTick); attention.stop(); attentionCallbacks.stop(); systemAppearance.stop(); sources.stop(); roon.stop(); pointer.stop(); herdr.stop(); void connection.stop(); for (const res of streams) res.end(); server.close(); restoreConsole(); }
+function shutdown() { if (closing) return; closing = true; listening = false; clearInterval(keepAlive); clearInterval(clockTick); appSettings.stop(); attention.stop(); attentionCallbacks.stop(); systemAppearance.stop(); sources.stop(); roon.stop(); pointer.stop(); herdr.stop(); void connection.stop(); for (const res of streams) res.end(); server.close(); restoreConsole(); }
 process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);

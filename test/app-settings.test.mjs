@@ -37,3 +37,15 @@ test('unsupported and invalid settings fail and native errors reach caller', asy
   settings.updated = Date.now() - 11000;
   assert.equal(settings.snapshot().available, false);
 });
+
+test('shutdown rejects pending settings and clears their timeout', async () => {
+  const settings = new AppSettings('private-token'); settings.sync({});
+  const request = settings.change({ action: 'about' });
+  const timer = settings.pending.timer;
+  settings.stop();
+  await assert.rejects(request, /shutting down/);
+  assert.equal(settings.pending, null);
+  assert.equal(timer._destroyed, true);
+  assert.equal(settings.snapshot().available, false);
+  assert.throws(() => settings.change({ action: 'about' }), /Open the Companion/);
+});
