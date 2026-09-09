@@ -231,6 +231,7 @@ test('clock-only HTTP settings persist and SSE advances without Herdr or an atta
     },
     device: { activeModule: 'clock', followMouse: false },
   })));
+  await writeFile(path.join(directory, 'device-connection.json'), JSON.stringify({ mode: 'off', path: '', serialNumber: '' }));
   const preload = path.join(directory, 'clock-time.mjs');
   await writeFile(preload, 'const start = performance.now(); const base = new Date(2026, 8, 9, 23, 59).getTime(); Date.now = () => base + Math.floor((performance.now() - start) / 2000) * 60000;\n');
   for (const command of ['codexbar', 'hey']) await writeFile(path.join(directory, command),
