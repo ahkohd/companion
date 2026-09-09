@@ -61,6 +61,18 @@ int main(void)
     assert(module_touch_roon_art(233, 387, 70, 190, 16, true));
     module_touch_begin(&touch, 300, 233, 1000);
     assert(module_touch_end(&touch, 200, 233, 101000) == MODULE_TOUCH_NEXT);
+    assert(module_touch_audio_row(63, 135, 3) == 0);
+    assert(module_touch_audio_row(402, 194, 3) == 0);
+    assert(module_touch_audio_row(200, 195, 3) == -1);
+    assert(module_touch_audio_row(200, 203, 3) == 1);
+    assert(module_touch_audio_row(200, 271, 3) == 2);
+    assert(module_touch_audio_row(200, 271, 2) == -1);
+    assert(module_touch_audio_row(403, 135, 3) == -1);
+    assert(module_touch_audio_row(200, 202, 3) == -1);
+    assert(module_touch_audio_row(200, 262, 3) == 1);
+    assert(module_touch_audio_row(200, 263, 3) == -1);
+    assert(module_touch_audio_row(200, 330, 3) == 2);
+    assert(module_touch_audio_row(200, 331, 3) == -1);
     puts("touch checks passed");
     return 0;
 }

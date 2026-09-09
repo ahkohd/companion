@@ -7,7 +7,7 @@ import DESIGN_SCHEMA from '../shared/design-schema.json' with { type: 'json' };
 import CATALOG from '../shared/grok-catalog.json' with { type: 'json' };
 import { MAX_USAGE_PROVIDERS, validProviderId } from './module-sources.mjs';
 
-export const MODULE_IDS = ['face', 'usage', 'hey', 'clock', 'roon'];
+export const MODULE_IDS = ['face', 'usage', 'hey', 'clock', 'roon', 'audio'];
 export const MAPPING_STATES = ['working', 'blocked', 'done', 'idle', 'unknown', 'disconnected'];
 export const NATIVE_EXPRESSIONS = ['working', 'blocked', 'done', 'idle', 'sleep', 'unknown', 'disconnected'];
 const animationIds = new Set([...NATIVE_EXPRESSIONS, ...CATALOG.map(item => item.id)]);
@@ -63,6 +63,8 @@ export function validateSettings(settings) {
   boolean(settings.modules.clock.showWeekday, 'Show weekday');
   boolean(settings.modules.clock.blinkSeparator, 'Blink separator');
   const roon = settings.modules.roon;
+  for (const id of ['roon', 'spotify', 'appleMusic', 'system']) boolean(roon.players?.[id], `${id} player`);
+  if (roon.enabled && !Object.values(roon.players).some(Boolean)) throw new Error('Enable at least one Now Playing source.');
   if (typeof roon.host !== 'string' || roon.host.length > 253 || (roon.host && !/^[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?$/.test(roon.host))) throw new Error('Enter a Roon server hostname or IPv4 address.');
   if (typeof roon.zoneId !== 'string' || roon.zoneId.length > 128 || /[\x00-\x1f\x7f]/.test(roon.zoneId)) throw new Error('Choose a valid Roon zone.');
   for (const state of MAPPING_STATES) if (settings.mappings[state] !== null && !animationIds.has(settings.mappings[state])) throw new Error(`Choose a valid animation for ${state}.`);
@@ -81,7 +83,7 @@ export function validateSettings(settings) {
 
 function migrateSavedSettings(saved) {
   const order = saved?.device?.moduleOrder;
-  if (saved?.version === 1 && Array.isArray(order) && [3, 4].includes(order.length) &&
+  if (saved?.version === 1 && Array.isArray(order) && [3, 4, 5].includes(order.length) &&
       new Set(order).size === order.length && order.every(id => MODULE_IDS.includes(id)) &&
       ['face', 'usage', 'hey'].every(id => order.includes(id))) {
     saved.device.moduleOrder = [...order, ...MODULE_IDS.filter(id => !order.includes(id))];

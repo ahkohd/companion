@@ -1,3 +1,5 @@
+import { buildAudio } from './build-audio.mjs';
+import { buildMediaRemote } from './build-mediaremote.mjs';
 import { bundleRuntime, signingTargets, validateNode } from './bundle-menubar.mjs';
 import { spawn, execFileSync } from 'node:child_process';
 import { cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
@@ -35,6 +37,8 @@ const run = (command, args) => new Promise((resolve, reject) => {
   child.once('error', reject);
   child.once('exit', (code, signal) => code === 0 ? resolve() : reject(new Error(`${command} failed (${signal || code}).`)));
 });
+// Never package a stale dashboard left by a previous build.
+if (bundled) await run('pnpm', ['run', 'build']);
 await mkdir(tools, { recursive: true });
 const temporary = await mkdtemp(path.join(tools, 'companion-menubar-build-'));
 const app = path.join(temporary, 'Companion.app');
@@ -44,6 +48,8 @@ try {
   await mkdir(path.join(contents, 'Resources'), { recursive: true });
   const resources = path.join(contents, 'Resources');
   await run('/usr/bin/xcrun', ['actool', '--compile', resources, '--app-icon', 'Companion', '--include-all-app-icons', '--output-partial-info-plist', path.join(temporary, 'icon-info.plist'), '--platform', 'macosx', '--minimum-deployment-target', bundled ? '13.5' : '13.0', path.join(root, 'macos/Companion/Companion.icon')]);
+  if (!bundled) await buildAudio({root,destination:tools,run,arch});
+  if (!bundled) await buildMediaRemote({ root, destination: path.join(tools, 'mediaremote'), run, arch });
   if (bundled) await bundleRuntime({ root, resources, node: officialNode, run, arch });
   if (release) { await mkdir(path.join(contents, 'Frameworks'), { recursive: true }); await cp(sparkleFramework, path.join(contents, 'Frameworks/Sparkle.framework'), { recursive: true, verbatimSymlinks: true }); await cp(path.join(path.dirname(sparkleFramework), 'LICENSE'), path.join(resources, 'Licenses/Sparkle-LICENSE')); }
   const config = bundled ? { root: 'runtime', node: 'node', path: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', port: 4317, bundled: true } : { root, node: process.execPath, path: process.env.PATH || '/usr/bin:/bin:/usr/sbin:/sbin', port: 4317 };
@@ -64,6 +70,7 @@ ${commit ? `<key>CompanionCommit</key><string>${commit}</string>` : ''}
 <key>LSMinimumSystemVersion</key><string>${bundled ? '13.5' : '13.0'}</string>
 <key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>
+<key>NSAppleEventsUsageDescription</key><string>Companion reads Spotify and Music playback and controls them when you use the Now Playing module.</string>
 <key>NSPrincipalClass</key><string>NSApplication</string>
 ${release ? `<key>SUFeedURL</key><string>${xml(feed)}</string><key>SUPublicEDKey</key><string>${xml(publicKey)}</string><key>SUEnableAutomaticChecks</key><true/>` : ''}
 </dict></plist>\n`);
@@ -72,10 +79,12 @@ ${release ? `<key>SUFeedURL</key><string>${xml(feed)}</string><key>SUPublicEDKey
   if (bundled) {
     const entitlements = path.join(temporary, 'node-entitlements.plist');
     // Node's official tools/osx-entitlements.plist identifies these JIT requirements.
-    await writeFile(entitlements, `<?xml version="1.0"?><plist version="1.0"><dict><key>com.apple.security.cs.allow-jit</key><true/><key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>${release ? '' : '<key>com.apple.security.cs.disable-library-validation</key><true/>'}</dict></plist>`);
+    await writeFile(entitlements, `<?xml version="1.0"?><plist version="1.0"><dict><key>com.apple.security.automation.apple-events</key><true/><key>com.apple.security.cs.allow-jit</key><true/><key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>${release ? '' : '<key>com.apple.security.cs.disable-library-validation</key><true/>'}</dict></plist>`);
+    const appEntitlements = path.join(temporary, 'app-entitlements.plist');
+    await writeFile(appEntitlements, '<?xml version="1.0"?><plist version="1.0"><dict><key>com.apple.security.automation.apple-events</key><true/></dict></plist>');
     for (const target of await signingTargets(app)) {
       const node = target.path === path.join(resources, 'node');
-      await run('/usr/bin/codesign', ['--force', '--options', 'runtime', ...(release ? ['--timestamp'] : []), ...(node ? ['--entitlements', entitlements] : ['--preserve-metadata=entitlements']), '--sign', signingIdentity, target.path]);
+      await run('/usr/bin/codesign', ['--force', '--options', 'runtime', ...(release ? ['--timestamp'] : []), ...(node ? ['--entitlements', entitlements] : target.path === app ? ['--entitlements', appEntitlements] : ['--preserve-metadata=entitlements']), '--sign', signingIdentity, target.path]);
     }
     // Test native addon loading after signing, with the same runtime shipped in the app.
     await run(path.join(resources, 'node'), ['--input-type=module', '-e', `await import(${JSON.stringify(pathToFileURL(path.join(resources, 'runtime/bridge/device.mjs')).href)}); await import(${JSON.stringify(pathToFileURL(path.join(resources, 'runtime/bridge/roon-source.mjs')).href)});`]);

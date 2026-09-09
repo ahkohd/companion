@@ -1,0 +1,28 @@
+ObjC.import('AppKit');
+
+function run(argv) {
+  const music = Application('com.apple.Music');
+  if (!music.running()) return JSON.stringify({running:false});
+  const action = argv[0] || 'get';
+  if (action === 'previous') music.previousTrack();
+  else if (action === 'next') music.nextTrack();
+  else if (action === 'playpause') music.playpause();
+  else if (action !== 'get') throw Error('Unsupported Apple Music command');
+  if (action !== 'get') return JSON.stringify({running:true});
+  const state = music.playerState();
+  if (state === 'stopped') return JSON.stringify({running:true, playing:false});
+  try {
+  const track = music.currentTrack;
+  const result = {running:true, playing:state==='playing', title:track.name(), artist:track.artist(), album:track.album(), trackId:track.persistentID(), bundleIdentifier:'com.apple.Music'};
+  try {
+    // A descriptor preserves binary artwork without temporary files or shell commands.
+    const script = $.NSAppleScript.alloc.initWithSource('tell application id "com.apple.Music" to get raw data of artwork 1 of current track');
+    const descriptor = script.executeAndReturnError(null);
+    const data = descriptor.data;
+    if (data.length > 0 && data.length <= 2 * 1024 * 1024 && music.currentTrack.persistentID() === result.trackId) {
+      result.artworkData = ObjC.unwrap(data.base64EncodedStringWithOptions(0));
+    }
+  } catch (_) { /* Some streams have no artwork. */ }
+  return JSON.stringify(result);
+  } catch (_) { return JSON.stringify({running:true}); }
+}

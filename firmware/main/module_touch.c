@@ -63,3 +63,10 @@ module_touch_action_t module_touch_end(module_touch_t *touch, int x, int y, int6
     if (elapsed <= 500000 && touch->max_x <= 16 && touch->max_y <= 16) return MODULE_TOUCH_TAP;
     return MODULE_TOUCH_NONE;
 }
+
+int module_touch_audio_row(int x, int y, unsigned count)
+{
+    if (count > 3) count = 3;
+    for (unsigned i = 0; i < count; ++i) if (module_touch_rect(x, y, 63, 135 + 68 * i, 340, 60)) return (int)i;
+    return -1;
+}

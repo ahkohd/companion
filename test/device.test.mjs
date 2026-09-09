@@ -220,3 +220,29 @@ test('ready metadata publishes the registered profile and rejects conflicting sc
   assert.equal(store.device.profile.id, 'waveshare-1.75-b');
   assert.ok(frames.length > 0);
 });
+
+
+test('Audio serial controls require enabled active module and valid absolute targets', async () => {
+  const {store,link}=setup();
+  store.settings.modules.audio={enabled:true}; store.activeModule='audio'; link.ready=true;
+  const controls=[],pages=[]; link.onAudioControl=request=>controls.push(request); link.onAudioPage=direction=>pages.push(direction);
+  const send=message=>link.receive(JSON.stringify({v:1,...message})+'\n');
+  const control={type:'audio-control',scope:'output',deviceId:17,action:'volume',value:45};
+  send(control); send({...control,scope:'input',action:'mute',value:true}); send({...control,action:'device',value:42}); send({type:'audio-page',direction:-1});
+  for(const fields of [{scope:'other'},{deviceId:0},{deviceId:1.5},{deviceId:0x100000000},{value:101},{value:'50'},{action:'mute',value:1},{action:'device',value:0},{action:'device',value:1.5},{action:'bad'}])send({...control,...fields});
+  await turn();
+  assert.deepEqual(controls,[{scope:'output',deviceId:17,action:'volume',value:45},{scope:'input',deviceId:17,action:'mute',value:true},{scope:'output',deviceId:17,action:'device',value:42}]); assert.deepEqual(pages,[-1]);
+  store.activeModule='face';send(control);send({type:'audio-page',direction:1});
+  store.activeModule='audio';store.settings.modules.audio.enabled=false;send(control);
+  await turn();assert.equal(controls.length,3);assert.equal(pages.length,1);
+});
+
+
+test('Audio picker view validates current module and device identity shape',async()=>{
+  const {store,link}=setup();store.settings.modules.audio={enabled:true};store.activeModule='audio';link.ready=true;
+  const calls=[];link.onAudioView=request=>calls.push(request);
+  const send=fields=>link.receive(JSON.stringify({type:'audio-view',v:1,open:true,scope:'input',deviceId:17,...fields})+'\n');
+  send({});for(const fields of [{open:false},{open:'true'},{scope:'bad'},{deviceId:0},{deviceId:0x100000000}])send(fields);
+  await turn();assert.deepEqual(calls,[{open:true,scope:'input',deviceId:17}]);
+  store.activeModule='face';send({});await turn();assert.equal(calls.length,1);
+});

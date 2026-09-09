@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import defaults from '../../shared/studio-defaults.json'
 import catalog from '../../shared/grok-catalog.json'
 
-export type ModuleId = 'face' | 'usage' | 'hey' | 'clock' | 'roon'
+export type ModuleId = 'face' | 'usage' | 'hey' | 'clock' | 'roon' | 'audio'
 export type DeviceTheme = 'dark' | 'light'
 export type DevicePalette = Record<'background'|'foreground'|'muted'|'surface'|'track'|'accent'|'success'|'warning'|'danger',number>
 export interface DeviceAppearanceSettings {mode:DeviceTheme|'system';palettes:Record<DeviceTheme,DevicePalette>}
@@ -18,7 +18,14 @@ export interface Source { status: string; refreshing?: boolean; installed: boole
 export interface UsageSource extends Source { providers: {id: string; label: string; plan?: string; windows: UsageWindow[]}[] }
 export interface HeyItem { id: string; sender: string; subject: string }
 export interface HeySource extends Source { items: HeyItem[]; hasMore: boolean; selectedBox: string }
-export interface RoonSource extends Source { coreName?: string; zones: {id:string;name:string;state:string}[]; zoneId:string; track:string; artist:string; playing:boolean; canPrevious:boolean; canNext:boolean; artId:string|null; artworkLoading?:boolean }
+export type PlayerId = 'roon' | 'spotify' | 'appleMusic' | 'system'
+export type AudioScope = 'output' | 'input'
+export interface AudioControlRequest {scope:AudioScope;deviceId:number;action:'volume'|'mute'|'device';value:number|boolean}
+export interface AudioViewRequest {open:boolean;scope:AudioScope;deviceId:number}
+export interface AudioPickerDevice {id:number;name:string;active:boolean}
+export interface AudioSource {pickerOpen:boolean;devices:AudioPickerDevice[];nextDeviceId:number;deviceCount:number;status:string;error:string|null;scope:AudioScope;deviceId:number;deviceName:string;volume:number|null;muted:boolean|null;canVolume:boolean;canMute:boolean;inputs:{id:number;name:string}[];outputs:{id:number;name:string}[]}
+export interface PlayerSummary {id:PlayerId;name:string;status:string}
+export interface RoonSource extends Source { player?:PlayerId; playerName?:string; players?:PlayerSummary[]; pageIndex?:number; pageCount?:number; canLike?:boolean; liked?:boolean; roon?:RoonSource; coreName?: string; zones: {id:string;name:string;state:string}[]; zoneId:string; track:string; artist:string; playing:boolean; canPrevious:boolean; canNext:boolean; artId:string|null; artworkLoading?:boolean }
 export interface StudioSettings extends Omit<Settings, 'mappings'|'deviceAppearance'> { mappings: Record<Status, string | null>;deviceAppearance:DeviceAppearanceSettings }
 export interface BoardProfile { id:string; name:string; status:'tested'|'experimental'; display:{width:number;height:number;shape:'round'|'rectangular'} }
 export interface StudioSnapshot {
@@ -27,13 +34,13 @@ export interface StudioSnapshot {
   deviceAppearance?: {mode:DeviceTheme|'system';resolved:DeviceTheme;system:DeviceTheme;palette:DevicePalette;design:Record<ModuleId,Record<string,number>>};
   connected: boolean; error: string | null; selected: string; expression: string | null;
   agents: {id: string; name: string; kind: string; project: string; state: string}[];
-  display: {state: string; label: string; name: string; nameShimmer?: boolean; animation?: string | null; expression?: string; counts?: Record<string,number>; dashboard?: {status: string; refreshing?: boolean; title: string; detail: string; track?:string;artist?:string;artId?:string;expanded?:boolean;playing?:boolean;canPrevious?:boolean;canNext?:boolean; time?: string; weekday?: string; blinkSeparator?: boolean; pageIndex?: number; pageCount?: number; openToken?: string; primary?: {provider?: string; label: string; remaining: number | null; reset: string; openable?: boolean}; secondary?: {provider?: string; label: string; remaining: number | null; reset: string; openable?: boolean}; items?: (Pick<HeyItem, 'sender' | 'subject'> & {openable?: boolean})[]}};
+  display: {state: string; label: string; name: string; nameShimmer?: boolean; animation?: string | null; expression?: string; counts?: Record<string,number>; dashboard?: {pickerOpen?:boolean;devices?:AudioPickerDevice[];nextDeviceId?:number;deviceCount?:number;scope?:AudioScope;deviceId?:number;deviceName?:string;volume?:number|null;muted?:boolean|null;canVolume?:boolean;canMute?:boolean;status: string; refreshing?: boolean; title: string; detail: string; player?:PlayerId;playerName?:string;players?:PlayerSummary[];canLike?:boolean;liked?:boolean;track?:string;artist?:string;artId?:string;expanded?:boolean;playing?:boolean;canPrevious?:boolean;canNext?:boolean; time?: string; weekday?: string; blinkSeparator?: boolean; pageIndex?: number; pageCount?: number; openToken?: string; primary?: {provider?: string; label: string; remaining: number | null; reset: string; openable?: boolean}; secondary?: {provider?: string; label: string; remaining: number | null; reset: string; openable?: boolean}; items?: (Pick<HeyItem, 'sender' | 'subject'> & {openable?: boolean})[]}};
   changedAt: number; animationMs: number; ageMs: number; updatedAt: number | null; layout: {textGap: number};
   device: {profile?:BoardProfile|null;fontError?: boolean; status: string; port: string | null; error: string | null; lastAck?: number; renderedModule?: string;connection?:SerialConnectionState};
   pointer: {supported: boolean; enabled: boolean; intervalMs: number; status: string; error: string | null; x: number; y: number};
-  modules: {usage: UsageSource; hey: HeySource; roon: RoonSource};
+  modules: {usage: UsageSource; hey: HeySource; roon: RoonSource; audio:AudioSource};
 }
-export const moduleNames: Record<ModuleId,string> = {face: 'Herdr Face', usage: 'CodexBar', hey: 'HEY', clock: 'Clock', roon: 'Roon'}
+export const moduleNames: Record<ModuleId,string> = {face: 'Herdr Face', usage: 'CodexBar', hey: 'HEY', clock: 'Clock', roon: 'Now Playing', audio:'Audio'}
 export const statusNames: Record<string,string> = {working:'Working',blocked:'Needs input',done:'Ready',idle:'Idle',unknown:'Unknown',disconnected:'Disconnected',sleep:'Sleeping'}
 export const statusDescriptions: Record<Status,string> = {working:'An agent is working on a task.',blocked:'An agent needs your input to continue.',done:'Work is ready for you to review.',idle:'Your agents are taking a moment.',unknown:'An agent has no reported status.',disconnected:'The connection to Herdr is unavailable.'}
 export const boxes = {imbox:'Imbox',feed:'The Feed',paperTrail:'Paper Trail',replyLater:'Reply Later',screener:'Screener'}

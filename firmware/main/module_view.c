@@ -6,6 +6,7 @@
 #include "roon_artwork.h"
 #include "usage_pattern.h"
 #include "roon_motion.h"
+#include "music_badge_icons.h"
 #include "module_touch.h"
 #include "reicon_icons.h"
 #include "src/misc/cache/instance/lv_image_cache.h"
@@ -25,6 +26,10 @@
 #define CHECKING_WIDTH 120
 #define CHECKING_HEIGHT 20
 
+static lv_obj_t *audio_picker, *audio_picker_footer, *audio_rows[3], *audio_names[3], *audio_checks[3];
+static lv_obj_t *audio_view, *audio_title, *audio_value, *audio_device, *audio_controls[3];
+static bool audio_enabled[3], audio_muted, audio_input;
+static uint32_t audio_text_color;
 static lv_obj_t *body, *usage, *mail, *empty, *clock_view, *roon;
 static display_module_t open_module;
 static char open_token[41];
@@ -38,6 +43,9 @@ static lv_obj_t *mail_senders[MAIL_ROWS], *mail_subjects[MAIL_ROWS];
 static lv_obj_t *empty_title, *empty_detail, *dots[MODULE_LIMIT];
 static lv_obj_t *clock_time, *clock_weekday;
 static bool clock_blink_active, clock_separator_visible = true;
+static lv_obj_t *music_source_badge, *music_like_badge;
+static music_player_t music_player;
+static bool music_can_like, music_liked;
 static lv_obj_t *roon_art, *roon_image, *roon_placeholder, *roon_title, *roon_artist, *roon_controls[3], *roon_chrome;
 static uint8_t *roon_pixels;
 static char roon_art_id[ROON_ART_ID_CAPACITY];
@@ -152,6 +160,44 @@ static void mail_card(unsigned index)
     lv_obj_set_style_text_line_space(mail_subjects[index], 0, 0);
 }
 
+static void audio_check_icon(lv_event_t *event)
+{
+    lv_area_t bounds; lv_obj_get_coords(lv_event_get_target_obj(event), &bounds);
+    lv_draw_image_dsc_t image; lv_draw_image_dsc_init(&image);
+    image.src = &music_audio_check; image.recolor = lv_color_hex(current_palette.foreground); image.recolor_opa = LV_OPA_COVER;
+    image.scale_x = image.scale_y = 64; image.antialias = true; image.pivot.x = image.pivot.y = 0;
+    lv_area_t area = {bounds.x1, bounds.y1, bounds.x1 + 95, bounds.y1 + 95};
+    lv_draw_image(lv_event_get_layer(event), &image, &area);
+}
+
+bool module_view_audio_open_hit(int x, int y)
+{
+    lv_obj_t *targets[] = {audio_title, audio_value, audio_device};
+    for (unsigned i = 0; i < 3; ++i) {
+        lv_area_t area; lv_obj_get_coords(targets[i], &area);
+        if (x >= area.x1 && x <= area.x2 && y >= area.y1 && y <= area.y2) return true;
+    }
+    return false;
+}
+
+static void audio_control_icon(lv_event_t *event)
+{
+    unsigned index = (unsigned)(uintptr_t)lv_event_get_user_data(event);
+    lv_obj_t *object = lv_event_get_target_obj(event);
+    lv_area_t bounds; lv_obj_get_coords(object, &bounds);
+    lv_draw_image_dsc_t image; lv_draw_image_dsc_init(&image);
+    image.src = index == 0 ? &music_audio_minus : index == 2 ? &music_audio_plus : audio_input ? (audio_muted ? &music_audio_mic_muted : &music_audio_mic) : (audio_muted ? &music_audio_muted : &music_audio_speaker);
+    image.recolor = lv_color_hex(audio_text_color); image.recolor_opa = LV_OPA_COVER;
+    image.opa = audio_enabled[index] ? LV_OPA_COVER : LV_OPA_30;
+    int icon_size = lv_obj_get_width(object) * 28 / 44;
+    image.scale_x = image.scale_y = icon_size * 256 / 96;
+    image.antialias = true;
+    image.pivot.x = image.pivot.y = 0;
+    int cx = (bounds.x1 + bounds.x2 + 1) / 2, cy = (bounds.y1 + bounds.y2 + 1) / 2;
+    lv_area_t area = {cx - icon_size / 2, cy - icon_size / 2, cx - icon_size / 2 + 95, cy - icon_size / 2 + 95};
+    lv_draw_image(lv_event_get_layer(event), &image, &area);
+}
+
 static void control_icon(lv_event_t *event)
 {
     lv_obj_t *object = lv_event_get_target_obj(event);
@@ -188,6 +234,24 @@ static void control_icon(lv_event_t *event)
     }
 }
 
+static void music_badge_icon(lv_event_t *event)
+{
+    bool heart = lv_event_get_user_data(event) != NULL;
+    lv_obj_t *object = lv_event_get_target_obj(event);
+    lv_area_t bounds;
+    lv_obj_get_coords(object, &bounds);
+    lv_draw_image_dsc_t image;
+    lv_draw_image_dsc_init(&image);
+    image.src = heart ? (music_liked ? &music_heart_filled : &music_heart) :
+        music_player == MUSIC_SPOTIFY ? &music_spotify : music_player == MUSIC_APPLE_MUSIC ? &music_apple_music : &music_roon;
+    image.recolor = lv_color_hex(heart && music_liked ? 0x1ed760 : !heart && music_player == MUSIC_SPOTIFY ? 0x1ed760 : 0xffffff);
+    image.recolor_opa = heart ? LV_OPA_COVER : LV_OPA_TRANSP;
+    int inset = heart ? 8 : 0;
+    int size = heart ? 20 : 30;
+    lv_area_t area = {bounds.x1 + inset, bounds.y1 + inset, bounds.x1 + inset + size - 1, bounds.y1 + inset + size - 1};
+    lv_draw_image(lv_event_get_layer(event), &image, &area);
+}
+
 void module_view_set_artwork(const char *id, const uint8_t *pixels)
 {
     if (!roon_pixels) return;
@@ -221,6 +285,25 @@ void module_view_create(lv_obj_t *screen)
     lv_obj_set_style_bg_color(clock_time, lv_color_black(), LV_PART_SELECTED);
     clock_weekday = label(clock_view, 73, 308, 320, &lv_font_geist_22, COLOR_MUTED, LV_TEXT_ALIGN_CENTER);
 
+    audio_picker = group(body);
+    audio_picker_footer = label(audio_picker, 33, 410, 400, &lv_font_geist_mono_16, COLOR_MUTED, LV_TEXT_ALIGN_CENTER);
+    for (unsigned i = 0; i < 3; ++i) {
+        audio_rows[i] = rounded(audio_picker, 63, 135 + 68 * i, 340, 60, 12, 0x151515);
+        audio_names[i] = label(audio_rows[i], 50, 3, 276, &lv_font_geist_22, COLOR_TEXT, LV_TEXT_ALIGN_LEFT);
+        lv_obj_set_height(audio_names[i], 54);
+        audio_checks[i] = rounded(audio_rows[i], 14, 18, 24, 24, 0, 0);
+        lv_obj_set_style_bg_opa(audio_checks[i], LV_OPA_TRANSP, 0);
+        lv_obj_add_event_cb(audio_checks[i], audio_check_icon, LV_EVENT_DRAW_MAIN, NULL);
+    }
+    audio_view = group(body);
+    audio_title = label(audio_view, 33, 85, 400, &lv_font_geist_22, COLOR_TEXT, LV_TEXT_ALIGN_CENTER);
+    audio_value = label(audio_view, 33, 130, 400, &lv_font_geist_pixel_128, COLOR_TEXT, LV_TEXT_ALIGN_CENTER);
+    audio_device = label(audio_view, 33, 300, 400, &lv_font_geist_22, COLOR_MUTED, LV_TEXT_ALIGN_CENTER);
+    for (unsigned i = 0; i < 3; ++i) {
+        audio_controls[i] = rounded(audio_view, 0, 358, 64, 64, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_opa(audio_controls[i], LV_OPA_TRANSP, 0);
+        lv_obj_add_event_cb(audio_controls[i], audio_control_icon, LV_EVENT_DRAW_MAIN, (void *)(uintptr_t)i);
+    }
     roon = group(body);
     roon_art = rounded(roon, 138, 70, 190, 190, 16, 0x151515);
     lv_obj_set_style_clip_corner(roon_art, true, 0);
@@ -241,6 +324,13 @@ void module_view_create(lv_obj_t *screen)
         lv_image_set_pivot(roon_image, ROON_ART_SIDE / 2, ROON_ART_SIDE / 2);
     }
     show(roon_image, false);
+    music_source_badge = rounded(roon_art, 8, 8, 30, 30, LV_RADIUS_CIRCLE, 0x151515);
+    music_like_badge = rounded(roon_art, 146, 146, 36, 36, LV_RADIUS_CIRCLE, 0x151515);
+    lv_obj_set_style_bg_opa(music_source_badge, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_bg_opa(music_like_badge, 221, 0);
+    lv_obj_add_event_cb(music_source_badge, music_badge_icon, LV_EVENT_DRAW_MAIN, NULL);
+    lv_obj_add_event_cb(music_like_badge, music_badge_icon, LV_EVENT_DRAW_MAIN, (void *)1);
+    show(music_source_badge, false); show(music_like_badge, false);
     roon_chrome = group(roon);
     roon_title = label(roon_chrome, 58, 280, 350, &lv_font_geist_22, COLOR_TEXT, LV_TEXT_ALIGN_CENTER);
     roon_artist = label(roon_chrome, 58, 314, 350, &lv_font_geist_16, COLOR_MUTED, LV_TEXT_ALIGN_CENTER);
@@ -310,6 +400,10 @@ static void apply_roon_pose(roon_pose_t pose)
     lv_image_set_rotation(roon_image, (int)lround(fmod(pose.angle, 360) * 10));
     lv_obj_set_pos(roon_placeholder, 0, (size - lv_font_geist_22.line_height) / 2);
     lv_obj_set_width(roon_placeholder, size);
+    lv_obj_set_pos(music_source_badge, 8, 8);
+    lv_obj_set_pos(music_like_badge, size - 44, size - 44);
+    show(music_source_badge, music_player != MUSIC_SYSTEM && !roon_motion.expanded);
+    show(music_like_badge, music_can_like && !roon_motion.expanded);
     lv_opa_t opacity = (lv_opa_t)lround(pose.chrome * 255);
     bool opacity_changed = opacity != roon_chrome_opacity;
     roon_chrome_opacity = opacity;
@@ -318,6 +412,14 @@ static void apply_roon_pose(roon_pose_t pose)
     lv_obj_set_style_text_opa(roon_title, roon_chrome_opacity, 0);
     lv_obj_set_style_text_opa(roon_artist, roon_chrome_opacity, 0);
     if (opacity_changed) for (unsigned i = 0; i < 3; ++i) lv_obj_invalidate(roon_controls[i]);
+}
+
+bool module_view_roon_like_hit(int x, int y)
+{
+    if (!roon_render_active || !music_can_like || roon_motion.expanded || !roon_motion_settled(&roon_motion)) return false;
+    int left = lv_obj_get_x(roon_art) + lv_obj_get_x(music_like_badge);
+    int top = lv_obj_get_y(roon_art) + lv_obj_get_y(music_like_badge);
+    return x >= left - 4 && x < left + 40 && y >= top - 4 && y < top + 40;
 }
 
 bool module_view_roon_art_hit(int x, int y)
@@ -451,6 +553,8 @@ void module_view_update(const module_snapshot_t *module, bool disconnected)
     show(usage, visible && ready && module->kind == DISPLAY_USAGE);
     show(mail, visible && ready && module->kind == DISPLAY_HEY && !mail_empty);
     show(clock_view, visible && ready && module->kind == DISPLAY_CLOCK);
+    show(audio_view, visible && ready && module->kind == DISPLAY_AUDIO && !module->audio_picker_open);
+    show(audio_picker, visible && ready && module->kind == DISPLAY_AUDIO && module->audio_picker_open);
     show(roon, visible && ready && module->kind == DISPLAY_ROON);
     show(empty, visible && (!ready || mail_empty));
     lv_opa_t card_opacity = module->show_card_backgrounds ? LV_OPA_COVER : LV_OPA_TRANSP;
@@ -472,7 +576,7 @@ void module_view_update(const module_snapshot_t *module, bool disconnected)
         const char *detail = module->detail[0] ? module->detail : "Set up this module in the playground";
         if (disconnected) detail = "Reconnect the desktop bridge";
         else if (module->status == MODULE_LOADING)
-            detail = module->kind == DISPLAY_USAGE ? "CodexBar" : module->kind == DISPLAY_CLOCK ? "Clock" : module->kind == DISPLAY_ROON ? "Roon" : "HEY";
+            detail = module->kind == DISPLAY_USAGE ? "CodexBar" : module->kind == DISPLAY_CLOCK ? "Clock" : module->kind == DISPLAY_ROON ? (module->player == MUSIC_SPOTIFY ? "Spotify" : module->player == MUSIC_SYSTEM ? "Now Playing" : module->player == MUSIC_APPLE_MUSIC ? "Apple Music" : "Roon") : module->kind == DISPLAY_AUDIO ? "Audio" : "HEY";
         lv_label_set_text(empty_detail, detail);
     } else if (module->kind == DISPLAY_USAGE) {
         const usage_design_t *layout = &design.usage;
@@ -488,6 +592,49 @@ void module_view_update(const module_snapshot_t *module, bool disconnected)
             layout->width, layout->height, layout->radius, layout->cardColor);
         update_metric(0, &module->primary, module->title, "Session", module->show_card_backgrounds, layout);
         update_metric(1, &module->secondary, module->title, "Weekly", module->show_card_backgrounds, layout);
+    } else if (module->kind == DISPLAY_AUDIO) {
+        const audio_design_t *layout = &design.audio;
+        if (module->audio_picker_open) {
+            const lv_font_t *picker_font = design_font(DESIGN_FONT_AUDIO_PICKER, 26);
+            for (unsigned i = 0; i < 3; ++i) {
+                show(audio_rows[i], i < module->audio_row_count);
+                if (i >= module->audio_row_count) continue;
+                style_panel(audio_rows[i], 63, 135 + 68 * i, 340, 60, 12, current_palette.surface);
+                lv_obj_set_style_bg_opa(audio_rows[i], LV_OPA_TRANSP, 0);
+                int width = 276;
+                int height = picker_font->line_height;
+                style_label(audio_names[i], 50, (60 - height) / 2, width, picker_font, 1, layout->textColor, LV_TEXT_ALIGN_LEFT);
+                lv_obj_set_height(audio_names[i], height);
+                lv_label_set_text(audio_names[i], module->audio_devices[i].name);
+                show(audio_checks[i], module->audio_devices[i].active); lv_obj_invalidate(audio_checks[i]);
+            }
+            show(audio_picker_footer, module->page_count > 1);
+            lv_obj_set_y(audio_picker_footer, layout->controlsY + layout->controlSize / 2 - lv_font_geist_mono_16.line_height / 2);
+            lv_obj_set_style_text_color(audio_picker_footer, lv_color_hex(layout->mutedColor), 0);
+            int digits = module->page_count >= 100 ? 3 : module->page_count >= 10 ? 2 : 1;
+            char page[20]; snprintf(page, sizeof(page), "%*u / %u", digits, module->page_index + 1, module->page_count);
+            lv_label_set_text(audio_picker_footer, page);
+            return;
+        }
+        const lv_font_t *font = design_font(DESIGN_FONT_AUDIO_VALUE, layout->valueSize);
+        style_label(audio_title, 33, layout->titleY, 400, design_font(DESIGN_FONT_AUDIO_TITLE, layout->titleSize), 1, layout->textColor, LV_TEXT_ALIGN_CENTER);
+        style_label(audio_value, 33, layout->valueY + design_font_inset(font, layout->valueSize), 400, font, 1, layout->textColor, LV_TEXT_ALIGN_CENTER);
+        style_label(audio_device, 33, layout->deviceY, 400, design_font(DESIGN_FONT_AUDIO_DEVICE, layout->deviceSize), 1, layout->mutedColor, LV_TEXT_ALIGN_CENTER);
+        lv_label_set_text(audio_title, module->audio_input ? "Input" : "Output");
+        char value[12];
+        if (module->audio_has_volume) snprintf(value, sizeof(value), "%d%%", (int)lroundf(module->audio_volume));
+        else snprintf(value, sizeof(value), "--");
+        lv_label_set_text(audio_value, value); lv_label_set_text(audio_device, module->audio_device_name);
+        audio_muted = module->audio_muted; audio_input = module->audio_input; audio_text_color = layout->textColor;
+        audio_enabled[0] = module->audio_can_volume && module->audio_volume > 0;
+        audio_enabled[1] = module->audio_can_mute;
+        audio_enabled[2] = module->audio_can_volume && module->audio_volume < 100;
+        for (unsigned i = 0; i < 3; ++i) {
+            int center = 233 + ((int)i - 1) * (layout->controlSize + layout->gap);
+            style_panel(audio_controls[i], center - layout->controlSize / 2, layout->controlsY, layout->controlSize, layout->controlSize, LV_RADIUS_CIRCLE, 0);
+            lv_obj_set_style_bg_opa(audio_controls[i], LV_OPA_TRANSP, 0);
+            lv_obj_invalidate(audio_controls[i]);
+        }
     } else if (module->kind == DISPLAY_CLOCK) {
         const clock_design_t *layout = &design.clock;
         lv_text_align_t align = design_text_align(layout->align);
@@ -511,6 +658,8 @@ void module_view_update(const module_snapshot_t *module, bool disconnected)
         style_label(roon_artist, 58, layout->artistY, 350, design_font(DESIGN_FONT_ROON_ARTIST, layout->artistSize), 1, layout->mutedColor, LV_TEXT_ALIGN_CENTER);
         lv_label_set_text(roon_title, module->track[0] ? module->track : "Nothing playing");
         lv_label_set_text(roon_artist, module->artist);
+        music_player = module->player; music_can_like = module->can_like; music_liked = module->liked;
+        lv_obj_invalidate(music_source_badge); lv_obj_invalidate(music_like_badge);
         roon_playing = module->playing; roon_previous = module->can_previous; roon_next = module->can_next;
         roon_text_color = layout->textColor;
         for (int i = 0; i < 3; ++i) {

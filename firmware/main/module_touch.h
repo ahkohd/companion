@@ -12,6 +12,8 @@ void module_touch_begin(module_touch_t *touch, int x, int y, int64_t now);
 void module_touch_move(module_touch_t *touch, int x, int y);
 module_touch_action_t module_touch_end(module_touch_t *touch, int x, int y, int64_t now);
 bool module_touch_rect(int x, int y, int left, int top, int width, int height);
+// Returns a visible Audio picker row index, or -1 outside rows.
+int module_touch_audio_row(int x, int y, unsigned count);
 // Roon controls: zero means no button; 1 previous, 2 play/pause, 3 next.
 int module_touch_roon(int x, int y, int top, int size, int gap, bool previous, bool next);
 bool module_touch_roon_art(int x, int y, int art_y, int art_size, int radius, bool expanded);

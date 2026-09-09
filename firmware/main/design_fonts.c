@@ -50,7 +50,7 @@ void design_fonts_set_data(const void *sans, size_t sans_size, const void *pixel
 
 static bool is_pixel(design_font_role_t role)
 {
-    return role == DESIGN_FONT_USAGE_VALUE || role == DESIGN_FONT_CLOCK_TIME;
+    return role == DESIGN_FONT_USAGE_VALUE || role == DESIGN_FONT_CLOCK_TIME || role == DESIGN_FONT_AUDIO_VALUE;
 }
 
 static const lv_font_t *bitmap_font(design_font_role_t role, int size)
@@ -96,8 +96,8 @@ const lv_font_t *design_font(design_font_role_t role, int size)
     slot->failed = false;
     if (slot->size != size) {
         if (slot->size) lv_tiny_ttf_set_size(slot->runtime, size);
-        slot->runtime->line_height = design_font_line(size);
-        slot->runtime->base_line = design_font_line(size) - baseline(size);
+        slot->runtime->line_height = role == DESIGN_FONT_AUDIO_PICKER && size == 26 ? 30 : design_font_line(size);
+        slot->runtime->base_line = slot->runtime->line_height - baseline(size);
         slot->size = size;
     }
     return slot->runtime;

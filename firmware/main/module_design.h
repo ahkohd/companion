@@ -95,12 +95,27 @@ typedef struct {
     int32_t spinArtwork;
 } roon_design_t;
 
+typedef struct {
+    int32_t titleY;
+    int32_t titleSize;
+    int32_t valueY;
+    int32_t valueSize;
+    int32_t deviceY;
+    int32_t deviceSize;
+    int32_t controlsY;
+    int32_t controlSize;
+    int32_t gap;
+    int32_t textColor;
+    int32_t mutedColor;
+} audio_design_t;
+
 typedef union {
     face_design_t face;
     usage_design_t usage;
     hey_design_t hey;
     clock_design_t clock;
     roon_design_t roon;
+    audio_design_t audio;
     int32_t values[28];
 } module_design_t;
 
@@ -112,6 +127,7 @@ static inline unsigned module_design_length(unsigned kind)
         case 2: return 16;
         case 3: return 9;
         case 4: return 15;
+        case 5: return 11;
         default: return 0;
     }
 }
@@ -206,6 +222,19 @@ static inline void module_design_default(unsigned kind, module_design_t *out)
             .accentColor = 6668684,
             .animateArtwork = 0,
             .spinArtwork = 0,
+        }; break;
+        case 5: out->audio = (audio_design_t){
+            .titleY = 85,
+            .titleSize = 24,
+            .valueY = 130,
+            .valueSize = 128,
+            .deviceY = 300,
+            .deviceSize = 22,
+            .controlsY = 358,
+            .controlSize = 64,
+            .gap = 12,
+            .textColor = 15920634,
+            .mutedColor = 9800868,
         }; break;
     }
 }
@@ -303,6 +332,20 @@ static inline bool module_design_valid(unsigned kind, unsigned field, int32_t va
             case 12: return (value >= 0 && value <= 16777215);
             case 13: return value == 0 || value == 1;
             case 14: return value == 0 || value == 1;
+            default: return false;
+        }
+        case 5: switch (field) {
+            case 0: return (value >= 0 && value <= 430);
+            case 1: return (value >= 12 && value <= 48);
+            case 2: return (value >= 0 && value <= 300);
+            case 3: return (value >= 24 && value <= 160);
+            case 4: return (value >= 0 && value <= 430);
+            case 5: return (value >= 12 && value <= 48);
+            case 6: return (value >= 0 && value <= 420);
+            case 7: return (value >= 28 && value <= 72);
+            case 8: return (value >= 8 && value <= 50);
+            case 9: return (value >= 0 && value <= 16777215);
+            case 10: return (value >= 0 && value <= 16777215);
             default: return false;
         }
         default: return false;

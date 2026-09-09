@@ -93,7 +93,15 @@ export class RoonSource extends EventEmitter {
         if (!active() || !this.config.host || this.core) return;
         this.manual = api.ws_connect({ host: this.config.host, port: 9330, onclose: () => {
           if (active() && !this.core) { clearTimeout(this.retry); this.retry = setTimeout(manualConnect, this.retryDelay); this.retry.unref?.(); }
-        }, onerror: () => { if (active() && !this.core) this.publish({ status: 'auth-required', error: 'Check the Roon server address and enable Companion in Roon Settings > Extensions.' }); } });
+        }, onerror: () => {
+          if (!active() || this.core) return;
+          clearTimeout(this.authTimer);
+          this.publish({ status: 'unavailable', error: 'Cannot reach the Roon server. Check its address and allow Companion access to your local network.' });
+          clearTimeout(this.retry); this.retry = setTimeout(manualConnect, this.retryDelay); this.retry.unref?.();
+        } });
+        this.manual?.transport?.ws?.on?.('error', error => {
+          if (active() && !this.core) console.warn('Roon connection failed:', error.code || error.message);
+        });
       };
       manualConnect();
       this.authTimer = setTimeout(() => { if (active() && !this.core) this.publish({ status: 'auth-required', error: 'Enable Companion in Roon Settings > Extensions. If it is missing, enter the server address.' }); }, this.requestTimeout);

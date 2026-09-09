@@ -37,11 +37,15 @@ export function heyPageCount(sources, settings) {
   return Math.max(1, Math.ceil(heyItems(sources, settings).length / heyPageSize(settings)));
 }
 export function dashboardFor(module, sources, settings, now = Date.now(), usagePage = 0, heyPage = 0) {
+  if (module === 'audio') {
+    const a=sources.audio||{}, enabled=settings.modules.audio.enabled;
+    return {state:'idle',label:'',name:'',dashboard:{status:enabled?(wireStatus[a.status]||'unavailable'):'unavailable',title:a.scope==='input'?'Input':'Output',detail:enabled?mailWireText(a.error||'',48):'Enable Audio in Modules',scope:a.scope==='input'?'input':'output',deviceId:a.deviceId||0,nextDeviceId:a.nextDeviceId||0,deviceCount:a.deviceCount||0,deviceName:mailWireText(a.deviceName||'No device',64),volume:a.volume??null,muted:a.muted??null,canVolume:enabled&&!!a.canVolume,canMute:enabled&&!!a.canMute,pickerOpen:enabled&&!!a.pickerOpen,devices:enabled&&a.pickerOpen?(a.devices||[]).slice(0,3).map(d=>({id:d.id,name:mailWireText(d.name,64),active:!!d.active})):[],pageIndex:a.pickerOpen?(a.pageIndex||0):(a.scope==='input'?1:0),pageCount:a.pickerOpen?(a.pageCount||1):2}};
+  }
   if (module === 'roon') {
     const r = sources.roon || {}, enabled = settings.modules.roon.enabled;
-    const status = enabled ? (r.status === 'ready' && !r.zoneId ? 'unavailable' : wireStatus[r.status] || 'unavailable') : 'unavailable';
+    const status = enabled ? (r.status === 'ready' && !r.zoneId && (!r.player || r.player === 'roon') ? 'unavailable' : wireStatus[r.status] || 'unavailable') : 'unavailable';
     return { state: 'idle', label: '', name: '', dashboard: {
-      status, title: 'Roon', expanded: false, detail: !enabled ? 'Enable Roon in the playground' : status === 'auth' ? 'Enable Companion in Roon' : r.status === 'ready' && !r.zoneId ? 'Choose a Roon zone in the playground' : status !== 'ready' ? 'Connect Roon in the playground' : '',
+      status, title: r.playerName || 'Roon', player: r.player || 'roon', playerName: r.playerName || 'Roon', pageIndex: r.pageIndex || 0, pageCount: r.pageCount || 1, canLike: status === 'ready' && !!r.canLike, liked: !!r.liked, expanded: false, detail: !enabled ? 'Enable Now Playing in the playground' : status === 'auth' ? 'Enable Companion in Roon' : r.status === 'ready' && !r.zoneId && (!r.player || r.player === 'roon') ? 'Choose a Roon zone in the playground' : status !== 'ready' ? (r.player === 'spotify' ? 'Open Spotify on this Mac' : r.player === 'appleMusic' ? 'Open Music on this Mac' : r.player === 'system' ? 'Play media on this Mac' : 'Connect Roon in the playground') : '',
       track: mailWireText(r.track || 'Nothing playing', 64), artist: mailWireText(r.artist || '', 64),
       artId: /^[a-f0-9]{40}$/.test(r.artId || '') ? r.artId : '', playing: !!r.playing,
       canPrevious: status === 'ready' && !!r.canPrevious, canNext: status === 'ready' && !!r.canNext,

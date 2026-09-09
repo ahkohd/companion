@@ -96,7 +96,8 @@ typedef struct {
 static SemaphoreHandle_t state_mutex;
 static QueueHandle_t cycle_queue;
 static attention_gesture_t attention_gesture;
-typedef struct { int8_t action; module_card_target_t card; char attention_id[37], attention_action[33]; uint32_t attention_revision; } touch_message_t;
+static uint32_t attention_touch_revision;
+typedef struct { int8_t action; music_player_t player; bool audio_input, audio_muted; uint32_t audio_device_id, audio_target_device_id; float audio_volume; module_card_target_t card; char attention_id[37], attention_action[33]; uint32_t attention_revision; } touch_message_t;
 static roon_artwork_t roon_artwork;
 static uint32_t shown_art_revision;
 static status_snapshot_t shared_status = {
@@ -473,8 +474,8 @@ static void accept_state(const status_snapshot_t *parsed)
 
     char ack[1024];
     snprintf(ack, sizeof(ack), "{\"type\":\"ack\",\"v\":1,\"seq\":%" PRIu32
-        ",\"rendered_seq\":%" PRIu32 ",\"render_us\":%" PRIu32 ",\"decor_count\":%d,\"eyes\":[[%.3f,%.3f],[%.3f,%.3f]],\"clip\":%d,\"clip_frame\":%d,\"clip_hash\":%" PRIu32 ",\"shimmer_pixels\":%d,\"name_shimmer_pixels\":%d,\"text_gap\":%d,\"status_top\":%d,\"module\":\"%s\",\"page_index\":%u,\"page_count\":%u,\"refreshing\":%s,\"font_error\":%s,\"rotation\":%u,\"panel_transfers\":%u,\"panel_error\":%u,\"panel_rotation\":%u,\"rotation_us\":%u,\"rotation_pixels\":%u,\"theme\":\"%s\",\"dma_largest\":%u,\"internal_free\":%u}\n",
-        parsed->seq, drawn_seq, duration, decor_count, drawn[0].w, drawn[0].h, drawn[1].w, drawn[1].h, clip_id, clip_frame, clip_hash, shimmer_pixels, name_shimmer_pixels, text_gap, status_top, display_module_name(drawn_module), page_index, page_count, refreshing ? "true" : "false", font_error ? "true" : "false", rotation, screen_rotation_transfers(), screen_rotation_transfer_error(), screen_rotation_submitted_angle(), screen_rotation_render_us(), screen_rotation_render_pixels(), light_theme ? "light" : "dark", (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL), (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+        ",\"rendered_seq\":%" PRIu32 ",\"render_us\":%" PRIu32 ",\"decor_count\":%d,\"eyes\":[[%.3f,%.3f],[%.3f,%.3f]],\"clip\":%d,\"clip_frame\":%d,\"clip_hash\":%" PRIu32 ",\"shimmer_pixels\":%d,\"name_shimmer_pixels\":%d,\"text_gap\":%d,\"status_top\":%d,\"module\":\"%s\",\"page_index\":%u,\"page_count\":%u,\"refreshing\":%s,\"font_error\":%s,\"rotation\":%u,\"panel_transfers\":%u,\"panel_error\":%u,\"panel_rotation\":%u,\"rotation_us\":%u,\"rotation_pixels\":%u,\"theme\":\"%s\",\"dma_largest\":%u,\"internal_free\":%u,\"touch_reads\":%u,\"touch_errors\":%u,\"touch_revision\":%u}\n",
+        parsed->seq, drawn_seq, duration, decor_count, drawn[0].w, drawn[0].h, drawn[1].w, drawn[1].h, clip_id, clip_frame, clip_hash, shimmer_pixels, name_shimmer_pixels, text_gap, status_top, display_module_name(drawn_module), page_index, page_count, refreshing ? "true" : "false", font_error ? "true" : "false", rotation, screen_rotation_transfers(), screen_rotation_transfer_error(), screen_rotation_submitted_angle(), screen_rotation_render_us(), screen_rotation_render_pixels(), light_theme ? "light" : "dark", (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL), (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL), (unsigned)companion_board_touch_reads(), (unsigned)companion_board_touch_errors(), (unsigned)companion_board_touch_revision());
     serial_write_line(ack);
 }
 
@@ -545,14 +546,35 @@ static void serial_task(void *argument)
                     display_module_name(message.card.module), message.card.index, message.card.token);
                 serial_write_line(line);
             }
-            else if (event >= 4 && event <= 6) {
-                const char *action = event == 4 ? "previous" : event == 5 ? "playpause" : "next";
+            else if ((event >= 4 && event <= 6) || event == 11) {
+                const char *action = event == 4 ? "previous" : event == 5 ? "playpause" : event == 6 ? "next" : "like";
+                const char *player = message.player == MUSIC_SPOTIFY ? "spotify" : message.player == MUSIC_SYSTEM ? "system" : message.player == MUSIC_APPLE_MUSIC ? "appleMusic" : "roon";
                 char line[96];
-                snprintf(line, sizeof(line), "{\"type\":\"roon-control\",\"v\":1,\"action\":\"%s\"}\n", action);
+                snprintf(line, sizeof(line), "{\"type\":\"roon-control\",\"v\":1,\"action\":\"%s\",\"player\":\"%s\"}\n", action, player);
                 serial_write_line(line);
             }
             else if (event == 7 || event == 8) serial_write_line(event == 7 ?
                 "{\"type\":\"roon-view\",\"v\":1,\"expanded\":true}\n" : "{\"type\":\"roon-view\",\"v\":1,\"expanded\":false}\n");
+            else if (event == 17) {
+                char line[128];
+                snprintf(line, sizeof(line), "{\"type\":\"audio-view\",\"v\":1,\"open\":true,\"scope\":\"%s\",\"deviceId\":%" PRIu32 "}\n",
+                    message.audio_input ? "input" : "output", message.audio_device_id);
+                serial_write_line(line);
+            }
+            else if (event == 14 || event == 15 || event == 16) {
+                char line[160], value[24];
+                if (event == 16) snprintf(value, sizeof(value), "%" PRIu32, message.audio_target_device_id);
+                else if (event == 15) snprintf(value, sizeof(value), "%s", message.audio_muted ? "true" : "false");
+                else snprintf(value, sizeof(value), "%.2f", (double)message.audio_volume);
+                snprintf(line, sizeof(line), "{\"type\":\"audio-control\",\"v\":1,\"scope\":\"%s\",\"deviceId\":%" PRIu32 ",\"action\":\"%s\",\"value\":%s}\n",
+                    message.audio_input ? "input" : "output", message.audio_device_id, event == 16 ? "device" : event == 15 ? "mute" : "volume", value);
+                serial_write_line(line);
+            }
+            else if (event == 13 || event == -13) serial_write_line(event > 0 ?
+                "{\"type\":\"audio-page\",\"v\":1,\"direction\":1}\n" : "{\"type\":\"audio-page\",\"v\":1,\"direction\":-1}\n");
+            else if (event == 12 || event == -12) serial_write_line(event > 0 ?
+                "{\"type\":\"roon-player\",\"v\":1,\"direction\":1}\n" :
+                "{\"type\":\"roon-player\",\"v\":1,\"direction\":-1}\n");
             else if (event == 2 || event == -2) serial_write_line(event > 0 ? "{\"type\":\"usage-page\",\"v\":1,\"direction\":1}\n" :
                 "{\"type\":\"usage-page\",\"v\":1,\"direction\":-1}\n");
             else if (event == 3 || event == -3) serial_write_line(event > 0 ? "{\"type\":\"hey-page\",\"v\":1,\"direction\":1}\n" :
@@ -626,6 +648,7 @@ static void refresh_face(lv_timer_t *timer)
     status_copy(&status);
     if (screen_rotation_apply(status.rotation)) {
         ++display_rotation_revision;
+        companion_board_touch_cancel();
         lv_indev_t *input = companion_board_input();
         if (input) { lv_indev_reset(input, NULL); lv_indev_wait_release(input); }
         shown_revision = UINT32_MAX;
@@ -644,6 +667,7 @@ static void refresh_face(lv_timer_t *timer)
     if (disconnected || !status.attention.active || strcmp(shown_attention->id, status.attention.id) ||
         shown_attention->revision != status.attention.revision || shown_attention->detail != status.attention.detail)
         attention_gesture_cancel(&attention_gesture);
+    if (attention_touch_revision != companion_board_touch_revision()) attention_gesture_cancel(&attention_gesture);
     const char *attention_action = attention_gesture_poll(&attention_gesture, &status.attention, display_rotation_revision, now);
     if (attention_action) queue_attention(&status.attention, attention_action);
 
@@ -814,9 +838,16 @@ static void touch_event(lv_event_t *event)
 {
     static module_touch_t touch;
     static module_card_target_t pressed_card;
-    static uint32_t pressed_rotation_revision;
+    static uint32_t pressed_rotation_revision, pressed_touch_revision;
     static EXT_RAM_BSS_ATTR attention_snapshot_t pressed_attention;
     static int pressed_x, pressed_y;
+    static display_module_t pressed_module;
+    static music_player_t pressed_player;
+    static bool pressed_audio_input, pressed_audio_picker;
+    static uint16_t pressed_audio_page;
+    static uint32_t pressed_audio_target;
+    static uint32_t pressed_audio_device;
+    static EXT_RAM_BSS_ATTR status_snapshot_t status;
     lv_indev_t *input = lv_indev_active();
     if (input == NULL) return;
     lv_point_t point;
@@ -825,22 +856,36 @@ static void touch_event(lv_event_t *event)
     screen_unrotate_point(screen_rotation_current(), point.x, point.y, &logical_x, &logical_y);
     point.x = logical_x; point.y = logical_y;
     lv_event_code_t code = lv_event_get_code(event);
+    int64_t sample_time = companion_board_touch_sample_time_us();
+    uint32_t touch_revision = companion_board_touch_revision();
+    if (!companion_board_touch_sample_valid()) {
+        touch.active = false;
+        attention_gesture_cancel(&attention_gesture);
+        return;
+    }
     if (code == LV_EVENT_PRESSED) {
-        module_touch_begin(&touch, point.x, point.y, esp_timer_get_time());
+        module_touch_begin(&touch, point.x, point.y, sample_time);
+        pressed_touch_revision = touch_revision;
         pressed_rotation_revision = display_rotation_revision;
         pressed_attention = *attention_view_snapshot();
-        attention_gesture_press(&attention_gesture, esp_timer_get_time());
+        attention_gesture_press(&attention_gesture, sample_time);
         pressed_x = point.x; pressed_y = point.y;
+        status_copy(&status);
+        pressed_module = status.module.kind; pressed_player = status.module.player;
+        pressed_audio_input = status.module.audio_input; pressed_audio_device = status.module.audio_device_id;
+        pressed_audio_picker = status.module.audio_picker_open; pressed_audio_page = status.module.page_index;
+        int audio_row = module_touch_audio_row(point.x, point.y, status.module.audio_row_count);
+        pressed_audio_target = audio_row >= 0 ? status.module.audio_devices[audio_row].id : 0;
         pressed_card = (module_card_target_t){0};
         module_view_card_at(point.x, point.y, &pressed_card);
     }
     else if (code == LV_EVENT_PRESSING) module_touch_move(&touch, point.x, point.y);
     else if (code == LV_EVENT_PRESS_LOST) { touch.active = false; attention_gesture_cancel(&attention_gesture); }
     else if (code == LV_EVENT_RELEASED) {
-        if (pressed_rotation_revision != display_rotation_revision) { touch.active = false; attention_gesture_cancel(&attention_gesture); return; }
-        module_touch_action_t action = module_touch_end(&touch, point.x, point.y, esp_timer_get_time());
-        static EXT_RAM_BSS_ATTR status_snapshot_t status;
+        if (pressed_rotation_revision != display_rotation_revision || pressed_touch_revision != touch_revision) { touch.active = false; attention_gesture_cancel(&attention_gesture); return; }
+        module_touch_action_t action = module_touch_end(&touch, point.x, point.y, sample_time);
         status_copy(&status);
+        if (pressed_module != status.module.kind) return;
         int8_t message;
         if (pressed_attention.active || status.attention.active) {
             if (!status.attention.active || !status.ever_received || esp_timer_get_time() - status.last_valid_us >= DISCONNECT_US ||
@@ -858,8 +903,9 @@ static void touch_event(lv_event_t *event)
             const char *hit = attention_view_action(point.x, point.y);
             const char *start = attention_view_action(pressed_x, pressed_y);
             if (!hit || !start || strcmp(hit, start)) hit = NULL;
+            attention_touch_revision = touch_revision;
             if (attention_gesture_tap(&attention_gesture, shown_attention, display_rotation_revision,
-                point.x, point.y, esp_timer_get_time(), hit)) queue_attention(shown_attention, "__dismiss");
+                point.x, point.y, sample_time, hit)) queue_attention(shown_attention, "__dismiss");
             return;
         }
         if (action == MODULE_TOUCH_TAP && pressed_card.token[0]) {
@@ -876,9 +922,12 @@ static void touch_event(lv_event_t *event)
         else if (action == MODULE_TOUCH_TAP && status.module.kind == DISPLAY_FACE) message = 0;
         else if (action == MODULE_TOUCH_TAP && status.module.kind == DISPLAY_ROON && status.module.status == MODULE_READY &&
                  status.ever_received && esp_timer_get_time() - status.last_valid_us < DISCONNECT_US) {
+            if (pressed_module != DISPLAY_ROON || pressed_player != status.module.player) return;
             module_design_t design;
             display_module_design(&status.module, &design);
-            if ((status.module.expanded || status.module.art_id[0]) && module_view_roon_art_hit(point.x, point.y)) {
+            if (status.module.can_like && module_view_roon_like_hit(point.x, point.y) &&
+                module_view_roon_like_hit(pressed_x, pressed_y)) message = 11;
+            else if ((status.module.expanded || status.module.art_id[0]) && module_view_roon_art_hit(point.x, point.y)) {
                 message = status.module.expanded ? 8 : 7;
             } else {
                 if (status.module.expanded || !module_view_roon_controls_ready()) return;
@@ -888,14 +937,42 @@ static void touch_event(lv_event_t *event)
                 message = button + 3;
             }
         }
+        else if (action == MODULE_TOUCH_TAP && status.module.kind == DISPLAY_AUDIO && status.module.status == MODULE_READY &&
+                 status.ever_received && esp_timer_get_time() - status.last_valid_us < DISCONNECT_US) {
+            if (pressed_module != DISPLAY_AUDIO || pressed_audio_input != status.module.audio_input || pressed_audio_device != status.module.audio_device_id || !pressed_audio_device) return;
+            module_design_t design; display_module_design(&status.module, &design);
+            const audio_design_t *layout = &design.audio;
+            if (pressed_audio_picker != status.module.audio_picker_open || pressed_audio_page != status.module.page_index) return;
+            if (status.module.audio_picker_open) {
+                int row = module_touch_audio_row(point.x, point.y, status.module.audio_row_count);
+                int pressed_row = module_touch_audio_row(pressed_x, pressed_y, status.module.audio_row_count);
+                if (row < 0 || row != pressed_row || !pressed_audio_target || status.module.audio_devices[row].id != pressed_audio_target) return;
+                touch_message_t control = {.action = 16, .audio_input = pressed_audio_input, .audio_device_id = pressed_audio_device, .audio_target_device_id = pressed_audio_target};
+                xQueueSend(cycle_queue, &control, 0); return;
+            }
+            if (module_view_audio_open_hit(point.x, point.y) && module_view_audio_open_hit(pressed_x, pressed_y)) {
+                touch_message_t view = {.action = 17, .audio_input = pressed_audio_input, .audio_device_id = pressed_audio_device};
+                xQueueSend(cycle_queue, &view, 0); return;
+            }
+            int button = module_touch_roon(point.x, point.y, layout->controlsY, layout->controlSize, layout->gap, status.module.audio_can_volume && status.module.audio_volume > 0, status.module.audio_can_volume && status.module.audio_volume < 100);
+            int pressed_button = module_touch_roon(pressed_x, pressed_y, layout->controlsY, layout->controlSize, layout->gap, true, true);
+            if (!button || button != pressed_button || (button == 2 && !status.module.audio_can_mute)) return;
+            touch_message_t control = {.action = button == 2 ? 15 : 14, .audio_input = pressed_audio_input, .audio_device_id = pressed_audio_device,
+                .audio_volume = fminf(100, fmaxf(0, status.module.audio_volume + (button == 1 ? -5 : 5))), .audio_muted = !status.module.audio_muted};
+            xQueueSend(cycle_queue, &control, 0); return;
+        }
+        else if (action == MODULE_TOUCH_PAGE_NEXT && status.module.kind == DISPLAY_AUDIO && status.module.page_count > 1) message = 13;
+        else if (action == MODULE_TOUCH_PAGE_PREVIOUS && status.module.kind == DISPLAY_AUDIO && status.module.page_count > 1) message = -13;
         else if (action == MODULE_TOUCH_NEXT && status.module.count > 1) message = 1;
         else if (action == MODULE_TOUCH_PREVIOUS && status.module.count > 1) message = -1;
+        else if (action == MODULE_TOUCH_PAGE_NEXT && status.module.kind == DISPLAY_ROON && status.module.page_count > 1) message = 12;
+        else if (action == MODULE_TOUCH_PAGE_PREVIOUS && status.module.kind == DISPLAY_ROON && status.module.page_count > 1) message = -12;
         else if (action == MODULE_TOUCH_PAGE_NEXT && status.module.kind == DISPLAY_USAGE && status.module.page_count > 1) message = 2;
         else if (action == MODULE_TOUCH_PAGE_PREVIOUS && status.module.kind == DISPLAY_USAGE && status.module.page_count > 1) message = -2;
         else if (action == MODULE_TOUCH_PAGE_NEXT && status.module.kind == DISPLAY_HEY && status.module.status == MODULE_READY && status.module.page_count > 1) message = 3;
         else if (action == MODULE_TOUCH_PAGE_PREVIOUS && status.module.kind == DISPLAY_HEY && status.module.status == MODULE_READY && status.module.page_count > 1) message = -3;
         else return;
-        const touch_message_t queued = { .action = message };
+        const touch_message_t queued = { .action = message, .player = pressed_player };
         xQueueSend(cycle_queue, &queued, 0);
     }
 }

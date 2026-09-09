@@ -1,3 +1,4 @@
+import {readFileSync,writeFileSync} from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -26,3 +27,14 @@ for (const size of [22, 44, 56, 128]) {
     '--output', `firmware/main/fonts/lv_font_geist_pixel_${size}.c`,
   ], { cwd: root, stdio: 'inherit' })
 }
+
+// Picker pagination uses real Geist Mono, with a 20px line box matching the web.
+const monoOutput = 'firmware/main/fonts/lv_font_geist_mono_16.c'
+execFileSync(process.execPath, [
+  'node_modules/lv_font_conv/lv_font_conv.js',
+  '--font', 'fonts/geist/GeistMono-Regular.ttf', '--range', '0x20,0x2F,0x30-0x39',
+  '--size', '16', '--bpp', '4', '--format', 'lvgl', '--no-compress', '--no-kerning',
+  '--lv-include', 'lvgl.h', '--lv-font-name', 'lv_font_geist_mono_16', '--output', monoOutput,
+], {cwd:root,stdio:'inherit'})
+const monoPath = new URL('../'+monoOutput,import.meta.url)
+writeFileSync(monoPath,readFileSync(monoPath,'utf8').replace(/\.line_height = \d+/,'.line_height = 20').replace(/\.base_line = \d+/,'.base_line = 4'))

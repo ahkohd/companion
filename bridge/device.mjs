@@ -16,10 +16,11 @@ function crc32(bytes) {
 }
 
 export class DeviceLink {
-  constructor(store, { port = process.env.ESP_SERIAL_PORT || '', baudRate = 115200, onAttention = null, onModule = null, onUsagePage = null, onHeyPage = null, onRoonControl = null, onRoonView = null, onOpenCard = null, Port = SerialPort } = {}) {
+  constructor(store, { port = process.env.ESP_SERIAL_PORT || '', baudRate = 115200, onAttention = null, onModule = null, onUsagePage = null, onHeyPage = null, onRoonControl = null, onRoonPlayer = null, onRoonView = null, onAudioPage = null, onAudioView = null, onAudioControl = null, onOpenCard = null, Port = SerialPort } = {}) {
     this.Port = Port; this.store = store; this.path = port; this.baudRate = baudRate; this.buffer = ''; this.stopped = true;
     this.onAttention = onAttention; this.onModule = onModule; this.onUsagePage = onUsagePage; this.onHeyPage = onHeyPage;
-    this.onOpenCard = onOpenCard; this.onRoonControl = onRoonControl; this.onRoonView = onRoonView; this.artwork = null; this.artCounter = randomInt(1, 0x100000000);
+    this.onAudioView = onAudioView; this.onAudioPage = onAudioPage; this.onAudioControl = onAudioControl;
+    this.onOpenCard = onOpenCard; this.onRoonControl = onRoonControl; this.onRoonPlayer = onRoonPlayer; this.onRoonView = onRoonView; this.artwork = null; this.artCounter = randomInt(1, 0x100000000);
     this.onChange = () => { if (this.lastSeq !== this.store.seq) this.send(); };
   }
   start() {
@@ -83,6 +84,9 @@ export class DeviceLink {
       } else if (message.type === 'ack' && this.ready && Number.isSafeInteger(message.seq) && message.seq >= 0 && message.seq <= this.store.seq) {
         this.lastAck = Date.now();
         const update = { lastAck: this.lastAck, lastAckSeq: message.seq };
+        for (const [wire,field] of [['touch_reads','touchReads'],['touch_errors','touchErrors'],['touch_revision','touchRevision']]) {
+          if (Number.isInteger(message[wire]) && message[wire]>=0 && message[wire]<=0xffffffff) update[field]=message[wire];
+        }
         if (Number.isSafeInteger(message.rendered_seq) && message.rendered_seq >= 0 && message.rendered_seq <= this.store.seq &&
             Number.isSafeInteger(message.render_us) && message.render_us >= 0 && message.render_us < 10000000 &&
             Array.isArray(message.eyes) && message.eyes.length === 2 && message.eyes.every(eye =>
@@ -141,13 +145,31 @@ export class DeviceLink {
       } else if (message.type === 'open-card' && this.ready && this.onOpenCard && ['hey', 'usage'].includes(message.module) && message.module === this.store.activeModule && Number.isInteger(message.index) && message.index >= 0 && message.index <= (message.module === 'usage' ? 1 : 2) && typeof message.token === 'string' && /^[a-f0-9]{40}$/.test(message.token)) {
         Promise.resolve().then(() => this.onOpenCard({module: message.module, index: message.index, token: message.token}))
           .catch(error => this.store.setDevice({ error: error.message || 'Could not open this card. Try again in the playground.' }));
+      } else if (message.type === 'audio-page' && this.ready && this.store.activeModule === 'audio' && this.store.settings.modules.audio?.enabled && [-1, 1].includes(message.direction)) {
+        Promise.resolve().then(() => this.onAudioPage?.(message.direction))
+          .catch(() => this.store.setDevice({ error: 'Could not change the audio page.' }));
+      } else if (message.type === 'audio-view' && this.ready && this.store.activeModule === 'audio' && this.store.settings.modules.audio?.enabled && message.open === true &&
+                 ['input', 'output'].includes(message.scope) && Number.isInteger(message.deviceId) && message.deviceId > 0 && message.deviceId <= 0xffffffff) {
+        Promise.resolve().then(() => this.onAudioView?.({open:true,scope:message.scope,deviceId:message.deviceId}))
+          .catch(error => this.store.setDevice({ error: error.message || 'Could not open the audio devices.' }));
+      } else if (message.type === 'audio-control' && this.ready && this.store.activeModule === 'audio' && this.store.settings.modules.audio?.enabled &&
+                 ['input', 'output'].includes(message.scope) && Number.isInteger(message.deviceId) && message.deviceId > 0 && message.deviceId <= 0xffffffff &&
+                 ((message.action === 'volume' && typeof message.value === 'number' && Number.isFinite(message.value) && message.value >= 0 && message.value <= 100) ||
+                  (message.action === 'mute' && typeof message.value === 'boolean') ||
+                  (message.action === 'device' && Number.isInteger(message.value) && message.value > 0 && message.value <= 0xffffffff))) {
+        const request = {scope: message.scope, deviceId: message.deviceId, action: message.action, value: message.value};
+        Promise.resolve().then(() => this.onAudioControl?.(request))
+          .catch(error => this.store.setDevice({ error: error.message || 'Could not control this audio device.' }));
+      } else if (message.type === 'roon-player' && this.ready && this.store.activeModule === 'roon' && this.store.settings.modules.roon?.enabled && [-1, 1].includes(message.direction)) {
+        Promise.resolve().then(() => this.onRoonPlayer?.(message.direction))
+          .catch(() => this.store.setDevice({ error: 'Could not switch the music player.' }));
       } else if (message.type === 'roon-view' && this.ready && typeof message.expanded === 'boolean' && this.store.canSetRoonView(message.expanded)) {
         Promise.resolve().then(() => this.onRoonView ? this.onRoonView(message.expanded) : this.store.setRoonExpanded(message.expanded))
-          .catch(() => this.store.setDevice({ error: 'Could not change the Roon artwork view. Try again in the playground.' }));
+          .catch(() => this.store.setDevice({ error: 'Could not change the artwork view. Try again in the playground.' }));
       } else if (message.type === 'roon-control' && this.ready && this.store.activeModule === 'roon' &&
-                 this.store.settings.modules.roon?.enabled && ['previous', 'next', 'playpause'].includes(message.action)) {
-        Promise.resolve().then(() => this.onRoonControl?.(message.action))
-          .catch(() => this.store.setDevice({ error: 'Could not control Roon. Try again in the playground.' }));
+                 this.store.settings.modules.roon?.enabled && ['previous', 'next', 'playpause', 'like'].includes(message.action)) {
+        Promise.resolve().then(() => this.onRoonControl?.(message.action, message.player))
+          .catch(() => this.store.setDevice({ error: 'Could not control this player. Try again in the playground.' }));
       }
     }
   }

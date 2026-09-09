@@ -55,14 +55,14 @@ int main(int argc, char **argv)
     lv_obj_set_style_text_color(label, lv_color_white(), 0); lv_obj_set_style_bg_color(lv_screen_active(), lv_color_black(), 0);
     unsigned cases = 0;
     for (unsigned role = 0; role < DESIGN_FONT_ROLE_COUNT; ++role) {
-        bool pixel_role = role == DESIGN_FONT_USAGE_VALUE || role == DESIGN_FONT_CLOCK_TIME;
+        bool pixel_role = role == DESIGN_FONT_USAGE_VALUE || role == DESIGN_FONT_CLOCK_TIME || role == DESIGN_FONT_AUDIO_VALUE;
         const lv_font_t *runtime = NULL;
         for (int size = pixel_role ? 24 : 12; size <= (pixel_role ? 160 : 48); ++size) {
             const lv_font_t *font = design_font(role, size); assert(font);
             int baseline = (int)(size * .97 + .5);
             assert(font->line_height - font->base_line + design_font_inset(font, size) == baseline);
             bool bitmap = pixel_role ? size == 44 || size == 56 || (size == 128 && role == DESIGN_FONT_CLOCK_TIME) : size == 16 || size == 22 || size == 28;
-            if (!bitmap) { if (runtime) assert(runtime == font); else runtime = font; assert(font->line_height == design_font_line(size)); }
+            if (!bitmap) { if (runtime) assert(runtime == font); else runtime = font; assert(font->line_height == (role == DESIGN_FONT_AUDIO_PICKER && size == 26 ? 30 : design_font_line(size))); }
             const char *text = pixel_role ? role == DESIGN_FONT_USAGE_VALUE ? "100%." : "12:59." : "Hello, world!";
             for (const char *p = text; *p; ++p) {
                 lv_font_glyph_dsc_t glyph; assert(lv_font_get_glyph_dsc(font, &glyph, *p, p[1])); assert(!glyph.is_placeholder);

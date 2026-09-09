@@ -4,13 +4,14 @@ import { resolveDesign } from '../../shared/device-appearance.mjs'
 import { devicePaletteDefaults } from '../lib/device-appearance'
 import { defaultDesign, designFor, colorHex, sansLine, pixelLine, percentageTop, type DesignValues, type Designs } from '../lib/design'
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactElement, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, ChartNoAxesCombined, Clock, Mail, Music2, Radio, RotateCcw, ScanFace } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ChartNoAxesCombined, Clock, Heart, Mail, Music2, Check, Minus, Plus, Volume2, VolumeX, Mic, MicOff, Radio, RotateCcw, ScanFace } from 'lucide-react'
 import Face, { useReducedMotion } from './face/Face'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
-import { animationName, moduleNames, type ModuleId, type OpenCardRequest, type StudioSnapshot } from '../lib/studio'
+import { animationName, moduleNames, type ModuleId, type PlayerId, type OpenCardRequest, type AudioControlRequest, type AudioViewRequest, type StudioSnapshot } from '../lib/studio'
 import { paletteShimmerGradient } from '../shimmer'
 import './device-preview.css'
+import {PlayerIcon} from './PlayerIcon'
 import {RoonIcon} from './RoonIcon'
 import {roonArtworkScale,useRoonMotion} from './roon-motion'
 
@@ -23,17 +24,21 @@ export interface DevicePreviewProps {
   onUsagePage: (direction: number) => void
   onHeyPage: (direction: number) => void
   onOpenCard?: (request: OpenCardRequest) => void
-  onRoonControl?: (action: string) => void
+  onRoonControl?: (action: string, player?:PlayerId) => void
   onRoonView?: (expanded:boolean) => void
+  onRoonPage?: (direction:number) => void
+  onAudioPage?: (direction:number) => void
+  onAudioControl?: (request:AudioControlRequest) => void
+  onAudioView?: (request:AudioViewRequest) => void
   pending?: boolean
   online?: boolean
 }
 
 type Dashboard = NonNullable<StudioSnapshot['display']['dashboard']>
 type Metric = Dashboard['primary']
-const moduleIds: ModuleId[] = ['face', 'usage', 'hey', 'clock', 'roon']
-const shortNames = { face: 'Face', usage: 'Usage', hey: 'HEY', clock: 'Clock', roon: 'Roon' }
-const moduleIcons = { face: ScanFace, usage: ChartNoAxesCombined, hey: Mail, clock: Clock, roon: Music2 }
+const moduleIds: ModuleId[] = ['face', 'usage', 'hey', 'clock', 'roon', 'audio']
+const shortNames = { face: 'Face', usage: 'Usage', hey: 'HEY', clock: 'Clock', roon: 'Music', audio:'Audio' }
+const moduleIcons = { face: ScanFace, usage: ChartNoAxesCombined, hey: Mail, clock: Clock, roon: Music2, audio:Volume2 }
 const encoder = new TextEncoder()
 
 function wireText(value: string, bytes = 48) {
@@ -45,14 +50,14 @@ function wireText(value: string, bytes = 48) {
   return result
 }
 
-function ModuleLabel({ x, y, width, children, small = false, large = false, largeSize = 44, mail = false, pixel = false, muted = false, align = 'left', lines = 1, truncate = false, size, color }: {
-  x: number; y: number; width: number; children: ReactNode; small?: boolean; large?: boolean; mail?: boolean; pixel?: boolean; muted?: boolean
+function ModuleLabel({ x, y, width, children, small = false, large = false, largeSize = 44, mail = false, pixel = false, mono = false, muted = false, align = 'left', lines = 1, truncate = false, size, color }: {
+  x: number; y: number; width: number; children: ReactNode; small?: boolean; large?: boolean; mail?: boolean; pixel?: boolean; mono?: boolean; muted?: boolean
   align?: CSSProperties['textAlign']; lines?: number; truncate?: boolean; largeSize?: number; size?:number; color?:string
 }) {
   const fontSize=size ?? (large ? largeSize : small ? 16 : mail ? 28 : 22)
   const height=pixel ? pixelLine(fontSize) : sansLine(fontSize)
   return <foreignObject x={x} y={y} width={width} height={height * lines}>
-    <div className={`dp-module-label${pixel ? ' dp-module-pixel' : ''}${muted ? ' dp-module-muted' : ''}${lines > 1 ? ' dp-module-wrap' : ''}`}
+    <div className={`dp-module-label${pixel ? ' dp-module-pixel' : ''}${mono ? ' dp-module-mono' : ''}${muted ? ' dp-module-muted' : ''}${lines > 1 ? ' dp-module-wrap' : ''}`}
       style={{ fontSize, color, lineHeight: `${height}px`, textAlign: align,
         ...(truncate ? { display: '-webkit-box', WebkitLineClamp: lines, WebkitBoxOrient: 'vertical' as const } : {}) }}>
       {children}
@@ -137,7 +142,7 @@ function CheckingIndicator({ animationMs, reduced, color, foreground }: { animat
   </ModuleLabel>
 }
 
-function RoonDashboard({dashboard,d,reduced,pending,onControl,onView,onSwipe}:{dashboard:Dashboard;d:DesignValues;reduced:boolean;pending?:boolean;onControl?:(action:string)=>void;onView?:(expanded:boolean)=>void;onSwipe?:(x:number,y:number)=>void}) {
+function RoonDashboard({dashboard,d,reduced,pending,onControl,onView,onSwipe}:{dashboard:Dashboard;d:DesignValues;reduced:boolean;pending?:boolean;onControl?:(action:string,player?:PlayerId)=>void;onView?:(expanded:boolean)=>void;onSwipe?:(x:number,y:number)=>void}) {
   const expanded=dashboard.expanded===true
   const motionReduced=useReducedMotion(reduced)
   const {progress,chrome,angle}=useRoonMotion(expanded,!!dashboard.playing,d.animateArtwork===1,d.spinArtwork===1,motionReduced)
@@ -151,7 +156,7 @@ function RoonDashboard({dashboard,d,reduced,pending,onControl,onView,onSwipe}:{d
       <ModuleLabel x={58} y={d.titleY} width={350} align="center" size={d.titleSize} color={colorHex(d.textColor)}>{dashboard.track||'Nothing playing'}</ModuleLabel>
       <ModuleLabel x={58} y={d.artistY} width={350} align="center" size={d.artistSize} color={colorHex(d.mutedColor)}>{dashboard.artist||''}</ModuleLabel>
       {(['previous','playpause','next'] as const).map((action,index)=><foreignObject key={action} x={233+(index-1)*(d.controlSize+d.gap)-d.controlSize/2} y={d.controlsY} width={d.controlSize} height={d.controlSize}>
-        <button className="dp-roon-control" style={{width:d.controlSize,height:d.controlSize,background:'transparent',color:colorHex(d.textColor)}} aria-label={action==='playpause'?(dashboard.playing?'Pause Roon':'Play Roon'):action==='previous'?'Previous track':'Next track'} disabled={expanded||progress>0||pending||!onControl||(action==='previous'&&!dashboard.canPrevious)||(action==='next'&&!dashboard.canNext)} onPointerDown={e=>e.stopPropagation()} onPointerUp={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();onControl?.(action)}}><svg viewBox="0 0 44 44" width={d.controlSize} height={d.controlSize} fill="currentColor" aria-hidden="true">{action==='playpause'?(dashboard.playing?<><rect x="12" y="8" width="6" height="28"/><rect x="26" y="8" width="6" height="28"/></>:<RoonIcon name="play" x={5} y={5} size={34}/>):<RoonIcon name={action} x={10} y={10} size={24}/>}</svg></button>
+        <button className="dp-roon-control" style={{width:d.controlSize,height:d.controlSize,background:'transparent',color:colorHex(d.textColor)}} aria-label={action==='playpause'?(dashboard.playing?`Pause ${dashboard.playerName||'music'}`:`Play ${dashboard.playerName||'music'}`):action==='previous'?'Previous track':'Next track'} disabled={expanded||progress>0||pending||!onControl||(action==='previous'&&!dashboard.canPrevious)||(action==='next'&&!dashboard.canNext)} onPointerDown={e=>e.stopPropagation()} onPointerUp={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();onControl?.(action,dashboard.player)}}><svg viewBox="0 0 44 44" width={d.controlSize} height={d.controlSize} fill="currentColor" aria-hidden="true">{action==='playpause'?(dashboard.playing?<><rect x="12" y="8" width="6" height="28"/><rect x="26" y="8" width="6" height="28"/></>:<RoonIcon name="play" x={5} y={5} size={34}/>):<RoonIcon name={action} x={10} y={10} size={24}/>}</svg></button>
       </foreignObject>)}
     </g>
     <defs><clipPath id={artClip}><rect x={x} y={y} width={size} height={size} rx={radius}/></clipPath></defs>
@@ -159,17 +164,55 @@ function RoonDashboard({dashboard,d,reduced,pending,onControl,onView,onSwipe}:{d
       {dashboard.artId?<image href={`/api/roon/art/${dashboard.artId}`} x={centerX-imageSize/2} y={centerY-imageSize/2} width={imageSize} height={imageSize} preserveAspectRatio="xMidYMid slice" transform={angle?`rotate(${angle} ${centerX} ${centerY})`:undefined}/>:null}
     </g>
     <foreignObject x={x} y={y} width={size} height={size}>
-      <button className="dp-roon-art-hit" style={{width:'100%',height:'100%',borderRadius:radius}} aria-label={expanded?'Collapse album artwork':'Expand album artwork'} aria-pressed={expanded} disabled={pending||(!dashboard.artId&&!expanded)||!onView}
+      <button className="dp-roon-art-hit" style={{width:'100%',height:'100%',borderRadius:radius,cursor:!dashboard.artId&&!expanded?'default':undefined}} tabIndex={!dashboard.artId&&!expanded?-1:undefined} aria-label={expanded?'Collapse album artwork':'Expand album artwork'} aria-pressed={expanded} disabled={pending}
         onPointerDown={e=>{e.stopPropagation();if(e.isPrimary&&e.button===0){gesture.current={x:e.clientX,y:e.clientY,id:e.pointerId,at:performance.now(),travel:0};e.currentTarget.setPointerCapture(e.pointerId)}}}
         onPointerMove={e=>{const start=gesture.current;if(start&&start.id===e.pointerId)start.travel=Math.max(start.travel,Math.abs(e.clientX-start.x),Math.abs(e.clientY-start.y))}}
         onPointerUp={e=>{e.stopPropagation();const start=gesture.current;gesture.current=null;if(!start||start.id!==e.pointerId||performance.now()-start.at>1500)return;const dx=e.clientX-start.x,dy=e.clientY-start.y;onSwipe?.(dx,dy);if(start.travel<12&&Math.abs(dx)<12&&Math.abs(dy)<12)toggle()}}
         onPointerCancel={()=>{gesture.current=null}} onLostPointerCapture={()=>{gesture.current=null}}
         onClick={e=>{e.stopPropagation();if(e.detail===0)toggle()}}/>
     </foreignObject>
+    {!expanded&&progress===0&&<>
+      {dashboard.player!=='system'&&<foreignObject x={x+8} y={y+8} width={30} height={30} pointerEvents="none"><span className="dp-player-badge" title={dashboard.playerName||'Roon'}><PlayerIcon player={dashboard.player||'roon'} size={30}/></span></foreignObject>}
+      {dashboard.canLike&&<foreignObject x={x+size-44} y={y+size-44} width={36} height={36}><button className="dp-player-like" aria-label={dashboard.liked?'Remove from favourites':'Add to favourites'} aria-pressed={!!dashboard.liked} disabled={pending||!onControl} onPointerDown={e=>e.stopPropagation()} onPointerUp={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();onControl?.('like',dashboard.player)}}><Heart size={20} fill={dashboard.liked?'currentColor':'none'}/></button></foreignObject>}
+    </>}
   </>
 }
 
-function ModuleDashboard({ module, dashboard, online, animationMs, reduced, showCardBackgrounds, design, onRoonControl, onRoonView, onOpenCard, onSwipe, pending }: { onRoonView?:(expanded:boolean)=>void; onRoonControl?:(action:string)=>void; onOpenCard?:(request:OpenCardRequest)=>void; onSwipe:(x:number,y:number)=>void; pending?:boolean; module: 'usage' | 'hey' | 'clock' | 'roon'; dashboard?: Dashboard; online: boolean; animationMs: number; reduced: boolean; showCardBackgrounds: boolean; design?:Partial<Designs> }) {
+function AudioTap({children,label,disabled,onActivate,onSwipe,className,style,pressed}:{children:ReactNode;label:string;disabled:boolean;onActivate:()=>void;onSwipe:(x:number,y:number)=>void;className:string;style?:CSSProperties;pressed?:boolean}) {
+  const gesture=useRef<{id:number;x:number;y:number;at:number;travel:number}|null>(null)
+  return <button className={className} style={style} aria-label={label} aria-pressed={pressed} disabled={disabled}
+    onPointerDown={event=>{event.stopPropagation();if(!event.isPrimary||event.button!==0)return;gesture.current={id:event.pointerId,x:event.clientX,y:event.clientY,at:performance.now(),travel:0};event.currentTarget.setPointerCapture(event.pointerId)}}
+    onPointerMove={event=>{const start=gesture.current;if(start?.id===event.pointerId)start.travel=Math.max(start.travel,Math.abs(event.clientX-start.x),Math.abs(event.clientY-start.y))}}
+    onPointerUp={event=>{event.stopPropagation();const start=gesture.current;gesture.current=null;if(!start||start.id!==event.pointerId||performance.now()-start.at>1500)return;const x=event.clientX-start.x,y=event.clientY-start.y;onSwipe(x,y);if(start.travel<12&&Math.abs(x)<12&&Math.abs(y)<12)onActivate()}}
+    onPointerCancel={()=>{gesture.current=null}} onLostPointerCapture={()=>{gesture.current=null}}
+    onClick={event=>{event.stopPropagation();if(event.detail===0)onActivate()}}>{children}</button>
+}
+
+function AudioDashboard({dashboard,d,pending,onControl,onView,onSwipe}:{dashboard:Dashboard;d:DesignValues;pending?:boolean;onControl?:(request:AudioControlRequest)=>void;onView?:(request:AudioViewRequest)=>void;onSwipe:(x:number,y:number)=>void}) {
+  const scope=dashboard.scope||'output'
+  const volume=typeof dashboard.volume==='number'&&Number.isFinite(dashboard.volume)?Math.max(0,Math.min(100,Math.round(dashboard.volume))):null
+  const valid=dashboard.deviceId!==undefined&&!!onControl&&!pending
+  const viewValid=dashboard.deviceId!==undefined&&!!onView&&!pending
+  const open=()=>{if(viewValid)onView!({open:true,scope,deviceId:dashboard.deviceId!})}
+  if(dashboard.pickerOpen)return <>
+    {(dashboard.devices||[]).slice(0,3).map((device,index)=><foreignObject key={`${scope}:${dashboard.deviceId}:${device.id}`} x={63} y={135+68*index} width={340} height={60}>
+      <AudioTap className="dp-audio-picker-row" style={{color:colorHex(d.textColor)}} label={`${device.name}${device.active?', active device':''}`} pressed={device.active} disabled={!valid} onSwipe={onSwipe} onActivate={()=>{if(valid)onControl!({scope,deviceId:dashboard.deviceId!,action:'device',value:device.id})}}><span className="dp-audio-picker-check" aria-hidden="true">{device.active&&<Check size={24}/>}</span><span className="dp-audio-picker-name">{wireText(device.name,96)}</span></AudioTap>
+    </foreignObject>)}
+    {!dashboard.devices?.length&&<ModuleLabel x={63} y={220} width={340} align="center" size={22} color={colorHex(d.mutedColor)}>No devices available</ModuleLabel>}
+    {(dashboard.pageCount??1)>1&&<ModuleLabel x={133} y={d.controlsY+d.controlSize/2-sansLine(16)/2} width={200} align="center" size={16} mono color={colorHex(d.mutedColor)}>{String((dashboard.pageIndex??0)+1).padStart(String(dashboard.pageCount).length,'\u00a0')} / {dashboard.pageCount}</ModuleLabel>}
+  </>
+  const buttons=[{action:'volume' as const,value:Math.max(0,(volume??0)-5),label:'Decrease volume',Icon:Minus,enabled:dashboard.canVolume&&volume!==null&&volume>0},{action:'mute' as const,value:!dashboard.muted,label:dashboard.muted?'Unmute':'Mute',Icon:scope==='input'?(dashboard.muted?MicOff:Mic):(dashboard.muted?VolumeX:Volume2),enabled:dashboard.canMute&&dashboard.muted!==null&&dashboard.muted!==undefined},{action:'volume' as const,value:Math.min(100,(volume??0)+5),label:'Increase volume',Icon:Plus,enabled:dashboard.canVolume&&volume!==null&&volume<100}]
+  return <>
+    <foreignObject x={58} y={d.titleY} width={350} height={sansLine(d.titleSize)}><AudioTap key={`${scope}:${dashboard.deviceId}:title`} className="dp-audio-device" style={{fontSize:d.titleSize,lineHeight:`${sansLine(d.titleSize)}px`,color:colorHex(d.mutedColor)}} label={`Choose ${scope} device`} disabled={!viewValid} onActivate={open} onSwipe={onSwipe}>{scope==='input'?'Input':'Output'}</AudioTap></foreignObject>
+    <foreignObject x={33} y={d.valueY} width={400} height={pixelLine(d.valueSize)}><AudioTap key={`${scope}:${dashboard.deviceId}:value`} className="dp-audio-device dp-module-pixel" style={{fontSize:d.valueSize,lineHeight:`${pixelLine(d.valueSize)}px`,color:colorHex(d.textColor)}} label={`Choose ${scope} device. Volume ${volume===null?'unavailable':`${volume} percent`}`} disabled={!viewValid} onActivate={open} onSwipe={onSwipe}>{volume===null?'—':`${volume}%`}</AudioTap></foreignObject>
+    <foreignObject x={58} y={d.deviceY} width={350} height={sansLine(d.deviceSize)}><AudioTap key={`${scope}:${dashboard.deviceId}:device`} className="dp-audio-device" style={{fontSize:d.deviceSize,lineHeight:`${sansLine(d.deviceSize)}px`,color:colorHex(d.mutedColor)}} label={`Choose ${scope} device. Current device: ${dashboard.deviceName||'none'}`} disabled={!viewValid} onActivate={open} onSwipe={onSwipe}>{wireText(dashboard.deviceName||'No audio device',64)}</AudioTap></foreignObject>
+    {buttons.map(({action,value,label,Icon,enabled},index)=><foreignObject key={label} x={233+(index-1)*(d.controlSize+d.gap)-d.controlSize/2} y={d.controlsY} width={d.controlSize} height={d.controlSize}>
+      <button className="dp-audio-control" style={{width:d.controlSize,height:d.controlSize,color:colorHex(d.textColor)}} aria-label={`${label} ${scope}`} aria-pressed={action==='mute'?dashboard.muted===true:undefined} disabled={!valid||!enabled} onPointerDown={event=>event.stopPropagation()} onPointerUp={event=>event.stopPropagation()} onClick={event=>{event.stopPropagation();if(valid)onControl!({scope,deviceId:dashboard.deviceId!,action,value})}}><Icon size={d.controlSize*28/44}/></button>
+    </foreignObject>)}
+  </>
+}
+
+function ModuleDashboard({ module, dashboard, online, animationMs, reduced, showCardBackgrounds, design, onAudioControl, onAudioView, onRoonControl, onRoonView, onOpenCard, onSwipe, pending }: { onAudioView?:(request:AudioViewRequest)=>void; onAudioControl?:(request:AudioControlRequest)=>void; onRoonView?:(expanded:boolean)=>void; onRoonControl?:(action:string,player?:PlayerId)=>void; onOpenCard?:(request:OpenCardRequest)=>void; onSwipe:(x:number,y:number)=>void; pending?:boolean; module: 'usage' | 'hey' | 'clock' | 'roon' | 'audio'; dashboard?: Dashboard; online: boolean; animationMs: number; reduced: boolean; showCardBackgrounds: boolean; design?:Partial<Designs> }) {
   const d=designFor(design,module)
   const title = wireText(dashboard?.title || moduleNames[module], 32)
   const ready = online && dashboard?.status === 'ready'
@@ -182,7 +225,8 @@ function ModuleDashboard({ module, dashboard, online, animationMs, reduced, show
     .filter(({ metric }) => metric && (metric.label || metric.reset || Number.isFinite(metric.remaining)))
   const mailItems = dashboard?.items?.slice(0, d.rows) ?? []
 
-  return <svg className="dp-module-screen" viewBox="0 0 466 466" role={module==='clock'?'img':'group'} aria-label={module === 'clock' && ready ? `Clock, ${dashboard?.time}, ${dashboard?.weekday || ''}` : `${title} ${module === 'usage' ? 'usage' : module === 'hey' ? 'mail' : module === 'roon' ? 'music' : 'clock'} dashboard`}>
+  return <svg className="dp-module-screen" viewBox="0 0 466 466" role={module==='clock'?'img':'group'} aria-label={module === 'clock' && ready ? `Clock, ${dashboard?.time}, ${dashboard?.weekday || ''}` : `${title} ${module === 'usage' ? 'usage' : module === 'hey' ? 'mail' : module === 'roon' ? 'music' : module === 'audio' ? 'audio' : 'clock'} dashboard`}>
+    {ready && module === 'audio' && <AudioDashboard dashboard={dashboard!} d={d} pending={pending} onControl={onAudioControl} onView={onAudioView} onSwipe={onSwipe}/>}
     {ready && module === 'roon' && <RoonDashboard dashboard={dashboard!} d={d} reduced={reduced} pending={pending} onControl={onRoonControl} onView={onRoonView} onSwipe={onSwipe}/>}
     {ready && module === 'clock' && <>
       <foreignObject x={d.x} y={d.y} width={d.width} height={pixelLine(d.timeSize)}>
@@ -222,7 +266,7 @@ function Hint({ text, children }: { text: string; children: ReactElement }) {
   return <Tooltip><TooltipTrigger render={children} /><TooltipContent side="bottom">{text}</TooltipContent></Tooltip>
 }
 
-export default function DevicePreview({ snapshot, localAnimation, localReplay = 0, onModule, onLive, onUsagePage, onHeyPage, onOpenCard, onRoonControl, onRoonView, pending = false, online = false }: DevicePreviewProps) {
+export default function DevicePreview({ snapshot, localAnimation, localReplay = 0, onModule, onLive, onUsagePage, onHeyPage, onOpenCard, onRoonControl, onRoonView, onRoonPage, onAudioControl, onAudioPage, onAudioView, pending = false, online = false }: DevicePreviewProps) {
   const panel = previewDisplay(snapshot?.device.profile)
   const canvasSide = Math.min(panel.width, panel.height)
   const titleId = useId()
@@ -248,8 +292,8 @@ export default function DevicePreview({ snapshot, localAnimation, localReplay = 
   const showNavigation = snapshot?.settings.device.showModuleNavigation === true
   const swipeEnabled = snapshot?.settings.device.swipeEnabled ?? true
   const canSwitch = !attention && !pending && online && enabled.length > 1
-  const canPage = !pending && online && (module === 'usage' || module === 'hey') && display?.dashboard?.status === 'ready' && (display.dashboard.pageCount ?? 1) > 1
-  const changePage = (direction: number) => module === 'hey' ? onHeyPage(direction) : onUsagePage(direction)
+  const canPage = !attention && !pending && online && (module === 'audio' ? !!onAudioPage && (display?.dashboard?.pageCount ?? 2)>1 : module === 'roon' ? !!onRoonPage && (display?.dashboard?.pageCount ?? 1)>1 : (module === 'usage' || module === 'hey') && display?.dashboard?.status === 'ready' && (display.dashboard.pageCount ?? 1)>1)
+  const changePage = (direction: number) => module === 'audio' ? onAudioPage?.(direction) : module === 'roon' ? onRoonPage?.(direction) : module === 'hey' ? onHeyPage(direction) : onUsagePage(direction)
   const showLive = !attention && (local || Boolean(snapshot && snapshot.expression !== null))
   const gesture = useRef<{ id: number; x: number; y: number; at: number } | null>(null)
   const palette=snapshot?.deviceAppearance?.palette || devicePaletteDefaults[snapshot?.settings.deviceAppearance?.mode==='light'?'light':'dark']
@@ -289,7 +333,7 @@ export default function DevicePreview({ snapshot, localAnimation, localReplay = 
       <div className="dp-hardware" data-shape={panel.shape} style={{aspectRatio:'auto'}} role="group" aria-label={local ? 'Local animation preview' : 'Device screen'}>
         <div className="dp-display" data-shape={panel.shape} style={{aspectRatio:`${panel.width} / ${panel.height}`,background:colorHex(palette.background)}}>
         <div className="device-screen" dir="ltr" style={{...style,position:'absolute',width:`${canvasSide/panel.width*100}%`,height:`${canvasSide/panel.height*100}%`,left:'50%',top:'50%',transform:'translate(-50%, -50%)',borderRadius:panel.shape==='round'?'50%':0}} tabIndex={canPage?0:undefined}
-          aria-label={module==='clock'?'Clock':module==='roon'?'Roon playback':module!=='face'?`${module==='hey'?'Mailbox list':'Usage cards'}. Use the up and down arrow keys to browse.`:undefined}
+          aria-label={module==='clock'?'Clock':module==='audio'?(display?.dashboard?.pickerOpen?'Audio devices. Use the up and down arrow keys to browse devices.':'Audio. Use the up and down arrow keys to switch input and output.'):module==='roon'?`${display?.dashboard?.playerName||'Now Playing'}. Use the up and down arrow keys to switch players.`:module!=='face'?`${module==='hey'?'Mailbox list':'Usage cards'}. Use the up and down arrow keys to browse.`:undefined}
           onKeyDown={event=>{if(canPage&&['ArrowDown','ArrowUp'].includes(event.key)){event.preventDefault();changePage(event.key==='ArrowDown'?1:-1)}}}
           onPointerDown={pointerDown} onPointerUp={pointerUp}
           onPointerCancel={() => { gesture.current = null }} onLostPointerCapture={() => { gesture.current = null }}>
@@ -302,7 +346,7 @@ export default function DevicePreview({ snapshot, localAnimation, localReplay = 
             preview={local || forcedPose} look={look}
           /> : <ModuleDashboard module={module} dashboard={display?.dashboard} online={online}
             animationMs={snapshot?.animationMs ?? 0} reduced={snapshot?.settings.appearance.reducedMotion ?? false}
-            showCardBackgrounds={snapshot?.settings.device.showCardBackgrounds === true} design={resolvedDesign} onRoonControl={onRoonControl} onRoonView={onRoonView} onOpenCard={onOpenCard} onSwipe={swipe} pending={pending} />}
+            showCardBackgrounds={snapshot?.settings.device.showCardBackgrounds === true} design={resolvedDesign} onAudioControl={onAudioControl} onAudioView={onAudioView} onRoonControl={onRoonControl} onRoonView={onRoonView} onOpenCard={onOpenCard} onSwipe={swipe} pending={pending} />}
           {module === 'face' && !attention?.detail && !shimmer && <div className="screen-caption"><span>{caption}</span></div>}
           {module === 'face' && !attention?.detail && !nameShimmer && <div className="screen-name">{subtitle}</div>}
           {attention && <AttentionOverlay key={`${attention.id}:${attention.revision}`} request={attention} detail={attention.detail} pending={pending || !online}/>}

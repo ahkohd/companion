@@ -117,6 +117,7 @@ const char *display_module_name(display_module_t kind)
         case DISPLAY_HEY: return "hey";
         case DISPLAY_CLOCK: return "clock";
         case DISPLAY_ROON: return "roon";
+        case DISPLAY_AUDIO: return "audio";
         default: return "face";
     }
 }
@@ -180,6 +181,7 @@ bool display_module_parse(const cJSON *root, module_snapshot_t *out)
         else if (strcmp(kind->valuestring, "hey") == 0) out->kind = DISPLAY_HEY;
         else if (strcmp(kind->valuestring, "clock") == 0) out->kind = DISPLAY_CLOCK;
         else if (strcmp(kind->valuestring, "roon") == 0) out->kind = DISPLAY_ROON;
+        else if (strcmp(kind->valuestring, "audio") == 0) out->kind = DISPLAY_AUDIO;
         else return false;
     }
     if (!parse_design(root, out)) return false;
@@ -235,7 +237,60 @@ bool display_module_parse(const cJSON *root, module_snapshot_t *out)
         !metric(cJSON_GetObjectItemCaseSensitive(dashboard, "primary"), &out->primary) ||
         !metric(cJSON_GetObjectItemCaseSensitive(dashboard, "secondary"), &out->secondary)) return false;
     if (out->kind == DISPLAY_CLOCK && !clock_fields(dashboard, out)) return false;
+    if (out->kind == DISPLAY_AUDIO) {
+        const cJSON *scope = cJSON_GetObjectItemCaseSensitive(dashboard, "scope");
+        if (!cJSON_IsString(scope) || !scope->valuestring) return false;
+        if (!strcmp(scope->valuestring, "input")) out->audio_input = true;
+        else if (strcmp(scope->valuestring, "output")) return false;
+        if (!optional_bool(dashboard, "pickerOpen", &out->audio_picker_open)) return false;
+        if (!integer(cJSON_GetObjectItemCaseSensitive(dashboard, "deviceId"), UINT32_MAX, &out->audio_device_id) ||
+            !message_text(dashboard, "deviceName", out->audio_device_name, sizeof(out->audio_device_name)) ||
+            (!out->audio_picker_open && (out->page_count != 2 || out->page_index != (out->audio_input ? 1 : 0)))) return false;
+        const cJSON *devices = cJSON_GetObjectItemCaseSensitive(dashboard, "devices");
+        if (devices) {
+            if (!cJSON_IsArray(devices) || cJSON_GetArraySize(devices) > 3) return false;
+            out->audio_row_count = cJSON_GetArraySize(devices);
+            for (unsigned i = 0; i < out->audio_row_count; ++i) {
+                const cJSON *device = cJSON_GetArrayItem(devices, i);
+                const cJSON *active = cJSON_GetObjectItemCaseSensitive(device, "active");
+                if (!cJSON_IsObject(device) || !integer(cJSON_GetObjectItemCaseSensitive(device, "id"), UINT32_MAX, &out->audio_devices[i].id) ||
+                    !out->audio_devices[i].id || !message_text(device, "name", out->audio_devices[i].name, sizeof(out->audio_devices[i].name)) || !cJSON_IsBool(active)) return false;
+                out->audio_devices[i].active = cJSON_IsTrue(active);
+                for (unsigned j = 0; j < i; ++j) if (out->audio_devices[j].id == out->audio_devices[i].id) return false;
+            }
+        } else if (out->audio_picker_open) return false;
+        const cJSON *next_device = cJSON_GetObjectItemCaseSensitive(dashboard, "nextDeviceId");
+        const cJSON *device_count = cJSON_GetObjectItemCaseSensitive(dashboard, "deviceCount");
+        if ((next_device && !integer(next_device, UINT32_MAX, &out->audio_next_device_id)) ||
+            (device_count && !integer(device_count, UINT32_MAX, &out->audio_device_count))) return false;
+        const cJSON *volume = cJSON_GetObjectItemCaseSensitive(dashboard, "volume");
+        const cJSON *muted = cJSON_GetObjectItemCaseSensitive(dashboard, "muted");
+        const cJSON *can_volume = cJSON_GetObjectItemCaseSensitive(dashboard, "canVolume");
+        const cJSON *can_mute = cJSON_GetObjectItemCaseSensitive(dashboard, "canMute");
+        if (!volume || !muted || !cJSON_IsBool(can_volume) || !cJSON_IsBool(can_mute)) return false;
+        if (!cJSON_IsNull(volume)) {
+            if (!cJSON_IsNumber(volume) || !isfinite(volume->valuedouble) || volume->valuedouble < 0 || volume->valuedouble > 100) return false;
+            out->audio_has_volume = true; out->audio_volume = volume->valuedouble;
+        }
+        if (!cJSON_IsNull(muted)) {
+            if (!cJSON_IsBool(muted)) return false;
+            out->audio_has_mute = true; out->audio_muted = cJSON_IsTrue(muted);
+        }
+        out->audio_can_volume = cJSON_IsTrue(can_volume) && out->audio_has_volume;
+        out->audio_can_mute = cJSON_IsTrue(can_mute) && out->audio_has_mute;
+    }
     if (out->kind == DISPLAY_ROON) {
+        const cJSON *player = cJSON_GetObjectItemCaseSensitive(dashboard, "player");
+        if (player) {
+            if (!cJSON_IsString(player) || !player->valuestring) return false;
+            if (!strcmp(player->valuestring, "roon")) out->player = MUSIC_ROON;
+            else if (!strcmp(player->valuestring, "spotify")) out->player = MUSIC_SPOTIFY;
+            else if (!strcmp(player->valuestring, "system")) out->player = MUSIC_SYSTEM;
+            else if (!strcmp(player->valuestring, "appleMusic")) out->player = MUSIC_APPLE_MUSIC;
+            else return false;
+        }
+        if (!optional_bool(dashboard, "canLike", &out->can_like) ||
+            !optional_bool(dashboard, "liked", &out->liked)) return false;
         const cJSON *expanded = cJSON_GetObjectItemCaseSensitive(dashboard, "expanded");
         if (expanded != NULL && !cJSON_IsBool(expanded)) return false;
         out->expanded = cJSON_IsTrue(expanded);

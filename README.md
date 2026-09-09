@@ -8,7 +8,7 @@ Companion is tested on the [Waveshare ESP32-S3-Touch-AMOLED-1.75-B](https://www.
 
 ## What you can do
 
-Choose from 5 modules:
+Choose from 6 modules:
 
 | Module | What it shows | What you need |
 | --- | --- | --- |
@@ -16,11 +16,21 @@ Choose from 5 modules:
 | CodexBar | Usage balances and reset times | An installed, configured CodexBar CLI |
 | HEY | Senders and subjects from your chosen mailbox | An installed, authenticated HEY CLI |
 | Clock | Time and an optional weekday | No additional service |
-| Roon | Album artwork, track details and playback controls | A Roon server with the Companion extension enabled |
+| Audio | Mac input/output device, volume and mute | macOS; controls depend on the audio device |
+| Now Playing | Album artwork, track details and playback controls for Roon, Spotify, Apple Music and macOS | Enable each player separately |
 
 The app detects installed CodexBar and HEY CLIs. Herdr Face, CodexBar, HEY and Clock start enabled.
 
 Enable the modules you want on the Modules page. Swipe left or right to switch between them. You can change their order.
+
+Now Playing shares one design across four players. Enable Roon, Spotify, Apple Music and macOS Now Playing separately, then swipe up or down to switch between them. Switching the display does not change playback. Spotify, Apple Music and Roon have an app icon at the top-left of the artwork; the system player has no badge.
+
+Spotify and Apple Music use their installed Mac apps. Apple Music starts disabled and controls Music independently of the active system player. Allow Companion access in System Settings > Privacy and Security > Automation when prompted. No developer account is required. macOS Now Playing follows the active Mac media app, which can be the same track shown by Spotify or Roon. Its bundled adapter uses private macOS APIs, so compatibility can change with system updates. Roon still uses its local server extension and selected listening zone.
+
+The bottom-right heart is reserved for sources that support changing likes. The current local integrations do not expose that capability, so it stays hidden.
+
+
+Audio starts disabled. Enable it in Modules to choose Mac input and output devices. Swipe up or down to switch between input and output, and tap the title, percentage or device name to open the device list. Swipe up or down to browse pages. The active device is first on page 1, with a check on the left; selecting any device returns to the audio controls. Volume and mute are available only when the selected device supports them. Audio controls the Mac default devices; it does not change a separate Roon network endpoint. You can adjust the layout in Designer.
 
 ## Get an agent's attention request
 
@@ -92,7 +102,7 @@ Live updates save changes as you make them. Turn them off to experiment, then se
 
 You can export and import designs. Sample content changes the preview without replacing live data on the device.
 
-Roon artwork expands instantly by default. You can enable the expansion animation and artwork spin in Designer.
+Now Playing artwork expands instantly by default. You can enable the expansion animation and artwork spin in Designer.
 
 ## Set device colours and rotation
 
@@ -259,4 +269,4 @@ Third-party code and assets retain their own licences:
 | Geist | Text and pixel fonts | [SIL Open Font License](fonts/geist/OFL.txt), [font sources](fonts/geist/README.md) |
 | Reicon | Previous, next and play icons | [MIT licence](public/icons/reicon/LICENSE.txt), [icon sources](public/icons/reicon/README.md) |
 
-The Roon client packages retain their Apache-2.0 licences. Other dependencies retain the licences distributed with their packages.
+The bundled MediaRemote Adapter retains its BSD-3-Clause licence. Its pinned source and attribution are in `vendor/mediaremote-adapter`. The Roon client packages retain their Apache-2.0 licences. Other dependencies retain the licences distributed with their packages.

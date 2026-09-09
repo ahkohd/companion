@@ -1,3 +1,5 @@
+import { buildAudio } from './build-audio.mjs';
+import { buildMediaRemote } from './build-mediaremote.mjs';
 import { createHash } from 'node:crypto';
 import { cp, mkdir, open, readdir, readFile, realpath, symlink } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
@@ -58,6 +60,8 @@ export async function bundleRuntime({ root, resources, node, run, arch }) {
   for (const entry of ['bridge', 'shared', 'skills', 'dist', 'package.json', 'LICENSE']) {
     await cp(path.join(root, entry), path.join(runtime, entry), { recursive: true, dereference: true, filter: source => !['.ignored', '.vite-temp'].includes(path.basename(source)) });
   }
+  await buildAudio({root,destination:path.join(runtime,'.tools'),run,arch});
+  await buildMediaRemote({ root, destination: path.join(runtime, '.tools/mediaremote'), run, arch });
   const packages = await bundleDependencies(root, path.join(runtime, 'node_modules'));
   console.log(`Bundled ${packages} production runtime packages.`);
   await mkdir(path.join(runtime, 'scripts'), { recursive: true });

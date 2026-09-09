@@ -7,6 +7,7 @@ node scripts/ensure-grok-clips.mjs
 node scripts/build-face-profiles.mjs
 node scripts/build-design-schema.mjs
 node scripts/build-reicon-icons.mjs
+node firmware/tools/build-music-badges.mjs
 if [[ -f firmware/sdkconfig ]] && rg -q '^CONFIG_SPIRAM_(RODATA|XIP_FROM_PSRAM)=y$' firmware/sdkconfig; then
   echo "Disable SPIRAM_RODATA and SPIRAM_XIP_FROM_PSRAM in firmware/sdkconfig: the animation library must stay in flash." >&2
   exit 1

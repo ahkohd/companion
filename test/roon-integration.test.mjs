@@ -11,8 +11,8 @@ test('four-module saved settings gain disabled Roon without resetting existing d
   const saved=defaultSettings();delete saved.modules.roon;delete saved.design.roon;saved.device.moduleOrder=['hey','clock','face','usage'];saved.design.usage.numberSize=63;
   const filePath=path.join(dir,'settings.json');await writeFile(filePath,JSON.stringify(saved));
   const store=new FaceStore(),settings=new StudioSettings(store,{filePath});await settings.load();
-  assert.deepEqual(store.settings.device.moduleOrder,[...saved.device.moduleOrder,'roon']);assert.equal(store.settings.modules.roon.enabled,false);assert.equal(store.settings.design.usage.numberSize,63);
-  const restored=structuredClone(store.settings);delete restored.modules.roon;delete restored.design.roon;restored.device.moduleOrder.pop();assert.deepEqual(restored,saved);
+  assert.deepEqual(store.settings.device.moduleOrder,[...saved.device.moduleOrder,'roon','audio']);assert.equal(store.settings.modules.roon.enabled,false);assert.equal(store.settings.design.usage.numberSize,63);
+  const restored=structuredClone(store.settings);delete restored.modules.roon;delete restored.design.roon;restored.device.moduleOrder=restored.device.moduleOrder.filter(id=>!['roon','audio'].includes(id));assert.deepEqual(restored,saved);
 });
 
 test('Roon metadata stays bounded and survives updates from the other sources',()=>{

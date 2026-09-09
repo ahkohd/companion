@@ -686,5 +686,97 @@
       ],
       "type": "toggle"
     }
+  ],
+  "audio": [
+    {
+      "key": "titleY",
+      "label": "Title position",
+      "group": "Layout",
+      "default": 85,
+      "min": 0,
+      "max": 430
+    },
+    {
+      "key": "titleSize",
+      "label": "Title size",
+      "group": "Typography",
+      "default": 24,
+      "min": 12,
+      "max": 48
+    },
+    {
+      "key": "valueY",
+      "label": "Volume position",
+      "group": "Layout",
+      "default": 130,
+      "min": 0,
+      "max": 300
+    },
+    {
+      "key": "valueSize",
+      "label": "Volume size",
+      "group": "Typography",
+      "default": 128,
+      "min": 24,
+      "max": 160
+    },
+    {
+      "key": "deviceY",
+      "label": "Device position",
+      "group": "Layout",
+      "default": 300,
+      "min": 0,
+      "max": 430
+    },
+    {
+      "key": "deviceSize",
+      "label": "Device name size",
+      "group": "Typography",
+      "default": 22,
+      "min": 12,
+      "max": 48
+    },
+    {
+      "key": "controlsY",
+      "label": "Controls position",
+      "group": "Controls",
+      "default": 358,
+      "min": 0,
+      "max": 420
+    },
+    {
+      "key": "controlSize",
+      "label": "Button size",
+      "group": "Controls",
+      "default": 64,
+      "min": 28,
+      "max": 72
+    },
+    {
+      "key": "gap",
+      "label": "Button spacing",
+      "group": "Controls",
+      "default": 12,
+      "min": 8,
+      "max": 50
+    },
+    {
+      "key": "textColor",
+      "label": "Primary text",
+      "group": "Colours",
+      "default": 15920634,
+      "min": 0,
+      "max": 16777215,
+      "type": "color"
+    },
+    {
+      "key": "mutedColor",
+      "label": "Secondary text",
+      "group": "Colours",
+      "default": 9800868,
+      "min": 0,
+      "max": 16777215,
+      "type": "color"
+    }
   ]
 }

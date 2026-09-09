@@ -1,0 +1,16 @@
+function run(argv) {
+  const spotify = Application('com.spotify.client');
+  if (!spotify.running()) return JSON.stringify({running:false});
+  const action = argv[0] || 'get';
+  if (action === 'previous') spotify.previousTrack();
+  else if (action === 'next') spotify.nextTrack();
+  else if (action === 'playpause') spotify.playpause();
+  else if (action !== 'get') throw Error('Unsupported Spotify command');
+  if (action !== 'get') return JSON.stringify({running:true});
+  const state = spotify.playerState();
+  if (state === 'stopped') return JSON.stringify({running:true, playing:false});
+  try {
+  const track = spotify.currentTrack;
+  return JSON.stringify({running:true, playing:state==='playing', title:track.name(), artist:track.artist(), album:track.album(), trackId:track.id(), artworkUrl:track.artworkUrl(), bundleIdentifier:'com.spotify.client'});
+  } catch (_) { return JSON.stringify({running:true}); }
+}

@@ -21,3 +21,9 @@ and the euro sign, where supported by Geist. Other scripts and emoji remain
 subject to the device's glyph limits. Browser fonts retain their full coverage.
 
 The original SIL Open Font License is in `OFL.txt` and `public/fonts/OFL.txt`.
+
+Audio picker labels use runtime Geist Sans at 26px in a 30px line box. Its page
+counter uses the pinned upstream `fonts/GeistMono/ttf/GeistMono-Regular.ttf`,
+checked in here as `GeistMono-Regular.ttf`. The 16px LVGL subset contains digits,
+slash and space, without kerning, with an explicit 20px line box and 4px baseline
+matching the web counter. Regenerate it with the same fonts command above.

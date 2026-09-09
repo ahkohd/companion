@@ -43,7 +43,7 @@ test('saved three-module settings acquire clock defaults without losing existing
   const filePath = path.join(directory, 'studio.json');
   const saved = mergeSettings(defaultSettings(), {
     appearance: { theme: 'dark', direction: 'rtl', reducedMotion: true },
-    device: { activeModule: 'hey', moduleOrder: ['hey', 'face', 'usage', 'clock', 'roon'], textGap: 4, followMouse: true, mouseInterval: 250, swipeEnabled: false, showModuleNavigation: true, showCardBackgrounds: true },
+    device: { activeModule: 'hey', moduleOrder: ['hey', 'face', 'usage', 'clock', 'roon', 'audio'], textGap: 4, followMouse: true, mouseInterval: 250, swipeEnabled: false, showModuleNavigation: true, showCardBackgrounds: true },
     modules: { usage: { enabled: true, providers: ['codex'], provider: 'codex', refreshSeconds: 120 }, hey: { enabled: true, box: 'feed', refreshSeconds: 300 } },
     mappings: { working: 'grok:happy', disconnected: 'sleep' },
   });
@@ -73,7 +73,7 @@ test('all four modules cycle in configured order and disabling clock chooses the
     device: { activeModule: 'face', moduleOrder: [...MODULE_IDS] },
     modules: { face: { enabled: true }, usage: { enabled: true }, hey: { enabled: true }, clock: { enabled: true } },
   }));
-  assert.deepEqual(store.enabledModules(), MODULE_IDS.filter(id=>id!=='roon'));
+  assert.deepEqual(store.enabledModules(), MODULE_IDS.filter(id=>!['roon','audio'].includes(id)));
   for (const id of ['usage', 'hey', 'clock', 'face']) assert.equal(store.cycleModule(1), id);
   assert.equal(store.cycleModule(-1), 'clock');
   store.setSettings(mergeSettings(store.settings, { modules: { clock: { enabled: false } } }));

@@ -1,3 +1,4 @@
+import { AudioSource } from './audio-source.mjs';
 import { Installations } from './installations.mjs';
 import { AppSettings } from './app-settings.mjs';
 import { DiagnosticLogs, installConsoleLogs } from './logs.mjs';
@@ -16,7 +17,7 @@ import { PointerTracker } from './pointer.mjs';
 import { DisplaySettings } from './display-settings.mjs';
 import { StudioSettings } from './studio-settings.mjs';
 import { ModuleSources } from './module-sources.mjs';
-import { RoonSource } from './roon-source.mjs';
+import { NowPlayingSource } from './now-playing-source.mjs';
 import { openCard } from './open-card.mjs';
 
 const appSettings = new AppSettings(process.env.COMPANION_NATIVE_TOKEN);
@@ -31,7 +32,8 @@ const systemAppearance = new SystemAppearance(value => store.setSystemAppearance
 const herdr = new HerdrClient();
 const pointer = new PointerTracker(store);
 const sources = new ModuleSources();
-const roon = new RoonSource({ pairingPath: process.env.ROON_PAIRING_PATH || undefined });
+const audio = new AudioSource();
+const roon = new NowPlayingSource({ pairingPath: process.env.ROON_PAIRING_PATH || undefined });
 let device, requestedArtId;
 async function syncArtwork() {
   if (!device) return;
@@ -59,6 +61,7 @@ const studio = new StudioSettings(store, {
   onApply: settings => {
     if (closing) return;
     sources.configure(settings.modules);
+    audio.configure({...settings.modules.audio,active:settings.device.activeModule==='audio'});
     roon.configure(settings.modules.roon);
     pointer.configure({ enabled: settings.device.followMouse, intervalMs: settings.device.mouseInterval });
     if (listening) {
@@ -67,6 +70,7 @@ const studio = new StudioSettings(store, {
     }
   },
 });
+audio.on('change', snapshot => store.setSources({audio:snapshot}));
 sources.on('change', snapshot => store.setSources(snapshot));
 roon.on('change', snapshot => { store.setSources({ roon: snapshot }); void syncArtwork().catch(() => {}); });
 await studio.load();
@@ -74,24 +78,28 @@ const attentionCallbacks = new AttentionCallbacks();
 const attention = new Attention(store, { deliver: (target, result) => attentionCallbacks.deliver(target, result), filePath: path.join(path.dirname(studio.filePath), 'attention-settings.json') });
 await attention.load();
 await systemAppearance.start();
-store.setSources({ roon: roon.snapshot() });
+store.setSources({ roon: roon.snapshot(), audio:audio.snapshot() });
 device = new DeviceLink(store, {
   onAttention: request => mutate(() => request.action === '__dismiss' ? attention.dismiss(request) : request.action === 'open' || request.action === 'back' ? attention.details({ ...request, detail: request.action === 'open' }) : attention.act(request)),
   onModule: direction => mutate(() => studio.cycleModule(direction)),
   onUsagePage: direction => mutate(() => store.cycleUsage(direction)),
   onHeyPage: direction => mutate(() => store.cycleHey(direction)),
   onOpenCard: request => mutate(() => openCard(store, request)),
+  onAudioView: request => mutate(() => { if(store.activeModule!=='audio')throw Error('Show Audio first.'); return audio.view(request); }),
+  onAudioPage: direction => mutate(() => { if(store.activeModule!=='audio')throw Error('Show Audio first.'); return audio.page({direction}); }),
+  onAudioControl: request => mutate(() => { if(store.activeModule!=='audio')throw Error('Show Audio first.'); return audio.control(request); }),
+  onRoonPlayer: direction => mutate(() => { if (store.activeModule !== 'roon') throw Error('Show Now Playing first.'); store.roonExpanded = false; return roon.select({ direction }); }),
   onRoonView: expanded => mutate(() => store.setRoonExpanded(expanded)),
-  onRoonControl: action => mutate(() => {
-    if (store.activeModule !== 'roon' || !studio.value.modules.roon.enabled) throw new Error('Show Roon on the device first.');
-    return roon.control(action);
+  onRoonControl: (action, player) => mutate(() => {
+    if (store.activeModule !== 'roon' || !studio.value.modules.roon.enabled) throw new Error('Show Now Playing on the device first.');
+    return roon.control(action, player);
   }),
 });
 const connection = new SerialConnection(store, { link: device, filePath: path.join(path.dirname(studio.filePath), 'device-connection.json'), port: process.env.ESP_SERIAL_PORT || '' });
 const streams = new Set();
 const send = (res, code, data) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2' };
-const writeRoutes = ['show', 'update', 'clear', 'act', 'details', 'dismiss', 'configure'].map(action => `/api/attention/${action}`).concat(['/api/installations', '/api/app-settings', '/api/native/sync', '/api/select', '/api/expression', '/api/pointer', '/api/display', '/api/settings', '/api/module', '/api/modules/refresh', '/api/usage/page', '/api/hey/page', '/api/roon/control', '/api/roon/view', '/api/open-card', '/api/device/connection', '/api/device/refresh', '/api/device/reconnect']);
+const writeRoutes = ['show', 'update', 'clear', 'act', 'details', 'dismiss', 'configure'].map(action => `/api/attention/${action}`).concat(['/api/audio/view', '/api/audio/page', '/api/audio/control', '/api/installations', '/api/app-settings', '/api/native/sync', '/api/select', '/api/expression', '/api/pointer', '/api/display', '/api/settings', '/api/module', '/api/modules/refresh', '/api/usage/page', '/api/hey/page', '/api/roon/control', '/api/roon/player', '/api/roon/view', '/api/open-card', '/api/device/connection', '/api/device/refresh', '/api/device/reconnect']);
 const server = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
@@ -144,10 +152,14 @@ const server = http.createServer(async (req, res) => {
         else if (url.pathname === '/api/device/reconnect') await connection.reconnect();
         else if (url.pathname === '/api/settings') await studio.save(request);
         else if (url.pathname === '/api/open-card') await openCard(store, request);
+        else if (url.pathname === '/api/audio/view') audio.view(request);
+        else if (url.pathname === '/api/audio/page') audio.page(request);
+        else if (url.pathname === '/api/audio/control') await audio.control(request);
+        else if (url.pathname === '/api/roon/player') { store.roonExpanded = false; roon.select(request); }
         else if (url.pathname === '/api/roon/view') store.setRoonExpanded(request.expanded);
         else if (url.pathname === '/api/roon/control') {
-          if (!studio.value.modules.roon.enabled) throw new Error('Enable Roon first.');
-          await roon.control(request.action);
+          if (!studio.value.modules.roon.enabled) throw new Error('Enable Now Playing first.');
+          await roon.control(request.action, request.player);
         }
         else if (url.pathname === '/api/module') await studio.activateModule(request.id);
         else if (url.pathname === '/api/usage/page') store.cycleUsage(request.direction);
@@ -192,8 +204,8 @@ const clockTick = setInterval(() => { store.tickClock(); store.tickWorkingSessio
 server.listen(port, '127.0.0.1', () => {
   listening = true; port = server.address().port; console.log(`Companion: http://127.0.0.1:${port}`);
   if (studio.value.modules.face.enabled) herdr.start();
-  void connection.start().catch(error => store.setDevice({ status: 'disconnected', error: error.message })); void sources.start(); void roon.start();
+  void connection.start().catch(error => store.setDevice({ status: 'disconnected', error: error.message })); void sources.start(); void roon.start(); audio.start();
 });
 server.on('error', error => { console.error(error.message); shutdown(); process.exitCode = 1; });
-function shutdown() { if (closing) return; closing = true; listening = false; clearInterval(keepAlive); clearInterval(clockTick); appSettings.stop(); attention.stop(); attentionCallbacks.stop(); systemAppearance.stop(); sources.stop(); roon.stop(); pointer.stop(); herdr.stop(); void connection.stop(); for (const res of streams) res.end(); server.close(); restoreConsole(); }
+function shutdown() { if (closing) return; closing = true; listening = false; clearInterval(keepAlive); clearInterval(clockTick); appSettings.stop(); attention.stop(); attentionCallbacks.stop(); systemAppearance.stop(); sources.stop(); roon.stop(); audio.stop(); pointer.stop(); herdr.stop(); void connection.stop(); for (const res of streams) res.end(); server.close(); restoreConsole(); }
 process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);

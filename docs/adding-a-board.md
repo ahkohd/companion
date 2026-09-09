@@ -29,6 +29,8 @@ These dimensions are an example, not a supported target. Register the JSON file 
 
 Copy the current profile under `firmware/boards`. Implement the board adapter for display startup, brightness, touch and locking. Keep its pin assignments, power sequencing and panel-specific transfer code in the board implementation or its board support package.
 
+The input adapter must preserve physical sample timestamps and movement independently of rendering. Implement the touch timestamp, validity, revision and cancellation APIs in `board.h`; input loss must cancel a contact rather than create a tap. Rotation changes must clear buffered contacts.
+
 Review the profile's CMake sources and link options, `firmware/main/idf_component.yml`, ESP-IDF configuration and partition table. The present memory settings and managed BSP dependency belong to the tested board. Do not copy them without checking flash capacity, PSRAM mode, panel bus, DMA support and touch wiring.
 
 Build the selected profile from the repository root:

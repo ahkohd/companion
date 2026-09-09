@@ -22,7 +22,7 @@ test('system changes update every module wire palette without changing saved pre
   const store = new FaceStore();
   store.setSettings(mergeSettings(store.settings, { deviceAppearance: { mode: 'system' } }));
   store.setSystemAppearance('light');
-  for (const module of ['face','usage','hey','clock','roon']) {
+  for (const module of ['face','usage','hey','clock','roon','audio']) {
     store.setSettings(mergeSettings(store.settings, { modules:{[module]:{enabled:true}},device:{activeModule:module} }));
     assert.equal(store.frame().theme, 'light');
     assert.equal(store.frame().palette.background, 0xffffff);

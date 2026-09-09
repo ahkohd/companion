@@ -18,7 +18,8 @@
       "clock",
       "face",
       "usage",
-      "roon"
+      "roon",
+      "audio"
     ],
     "rotation": 0
   },
@@ -46,7 +47,16 @@
     "roon": {
       "enabled": false,
       "host": "",
-      "zoneId": ""
+      "zoneId": "",
+      "players": {
+        "roon": true,
+        "spotify": false,
+        "appleMusic": false,
+        "system": false
+      }
+    },
+    "audio": {
+      "enabled": false
     }
   },
   "mappings": {
@@ -144,6 +154,19 @@
       "accentColor": 6668684,
       "animateArtwork": 0,
       "spinArtwork": 0
+    },
+    "audio": {
+      "titleY": 85,
+      "titleSize": 24,
+      "valueY": 130,
+      "valueSize": 128,
+      "deviceY": 300,
+      "deviceSize": 22,
+      "controlsY": 358,
+      "controlSize": 64,
+      "gap": 12,
+      "textColor": 15920634,
+      "mutedColor": 9800868
     }
   },
   "deviceAppearance": {

@@ -58,7 +58,7 @@ test('HEY designer rows paginate all messages and clamp after row or source chan
 });
 
 test('wire includes only active themed design in stable schema order and fits 2048 bytes', () => {
-  const store = new FaceStore(); store.setSettings(mergeSettings(store.settings, { modules: { usage: { enabled: true }, hey: { enabled: true }, clock: { enabled: true }, roon: { enabled: true } } }));
+  const store = new FaceStore(); store.setSettings(mergeSettings(store.settings, { modules: { usage: { enabled: true }, hey: { enabled: true }, clock: { enabled: true }, roon: { enabled: true }, audio: { enabled: true } } }));
   store.setPointer({ enabled: true, status: 'active', x: -0.12345678901234567, y: 0.12345678901234567 });
   store.ingest([{ pane_id: 'escaped', agent: 'pi', agent_status: 'working', name: '"'.repeat(64) }]); store.select('escaped');
   store.setSources({ hey: { ...hey().hey, refreshing: true, items: hey().hey.items.map(item => ({ ...item, url: 'https://app.hey.com/topics/' + item.id, sender: '"'.repeat(240), subject: '"'.repeat(240) })) }, usage: { status: 'ready', providers: [{ id: 'codex', label: '"'.repeat(64), windows: [1, 2].map(id => ({ id: String(id), label: '"'.repeat(64), usedPercent: 99, resetAt: 9999999999999 })) }] } });

@@ -14,11 +14,12 @@
 #define MODULE_MESSAGE_LIMIT 3
 #define MODULE_SENDER_CAPACITY 33
 #define MODULE_SUBJECT_CAPACITY 65
-#define MODULE_LIMIT 5
+#define MODULE_LIMIT 6
 #define MODULE_CLOCK_TIME_CAPACITY 8
 #define MODULE_WEEKDAY_CAPACITY 4
 
-typedef enum { DISPLAY_FACE, DISPLAY_USAGE, DISPLAY_HEY, DISPLAY_CLOCK, DISPLAY_ROON } display_module_t;
+typedef enum { DISPLAY_FACE, DISPLAY_USAGE, DISPLAY_HEY, DISPLAY_CLOCK, DISPLAY_ROON, DISPLAY_AUDIO } display_module_t;
+typedef enum { MUSIC_ROON, MUSIC_SPOTIFY, MUSIC_SYSTEM, MUSIC_APPLE_MUSIC } music_player_t;
 typedef enum { MODULE_READY, MODULE_LOADING, MODULE_UNAVAILABLE, MODULE_AUTH, MODULE_ERROR } module_status_t;
 
 typedef struct {
@@ -68,7 +69,15 @@ typedef struct {
     char weekday[MODULE_WEEKDAY_CAPACITY];
     bool blink_separator;
     char track[65], artist[65], art_id[41];
-    bool playing, can_previous, can_next, expanded;
+    bool playing, can_previous, can_next, expanded, can_like, liked;
+    music_player_t player;
+    bool audio_picker_open;
+    uint8_t audio_row_count;
+    struct { uint32_t id; char name[65]; bool active; } audio_devices[3];
+    bool audio_input, audio_has_volume, audio_has_mute, audio_muted, audio_can_volume, audio_can_mute;
+    uint32_t audio_device_id, audio_next_device_id, audio_device_count;
+    float audio_volume;
+    char audio_device_name[65];
     module_metric_t primary;
     module_metric_t secondary;
     bool has_count;
@@ -101,6 +110,8 @@ static inline void display_module_design(const module_snapshot_t *module, module
                 out->hey.textColor=p->foreground; out->hey.mutedColor=p->muted; out->hey.cardColor=p->surface; break;
             case DISPLAY_CLOCK:
                 out->clock.textColor=p->foreground; out->clock.mutedColor=p->muted; break;
+            case DISPLAY_AUDIO:
+                out->audio.textColor=p->foreground; out->audio.mutedColor=p->muted; break;
             case DISPLAY_ROON:
                 out->roon.textColor=p->foreground; out->roon.mutedColor=p->muted; out->roon.accentColor=p->accent; break;
         }

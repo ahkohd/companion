@@ -180,6 +180,22 @@ HEY uses the same vertical gesture for three-message pages:
 
 The device sends these only when `pageCount` is greater than one. The bridge wraps pages across selected provider windows or the recent mailbox list. Page selection is transient and independent of the setting for horizontal module swipes. The browser sends the same intent through `POST /api/usage/page` or `POST /api/hey/page`.
 
+Audio uses vertical swipes to switch input and output. Tapping its title, percentage or device name opens a device picker:
+
+```json
+{"type":"audio-view","v":1,"open":true,"scope":"output","deviceId":78}
+```
+
+While `dashboard.pickerOpen` is true, `pageIndex` and `pageCount` describe device-list pages. `devices` contains up to three rows with `id`, `name` (up to 64 UTF-8 bytes) and `active`. Vertical swipes send `audio-page` with direction 1 or -1 to browse these pages. Selecting a row sends:
+
+```json
+{"type":"audio-control","v":1,"scope":"output","deviceId":78,"action":"device","value":78}
+```
+
+The bridge checks the current and chosen device IDs before applying a change. Selecting the active device closes the picker without changing the Mac audio device. There is no Back button. The browser uses `POST /api/audio/view`, `/api/audio/page` and `/api/audio/control` for the same actions.
+
+The board reads touch interrupts independently of LVGL rendering and buffers movement with its original timestamps. Rendering delays cannot erase movement before gesture classification. Buffer overflow, read errors, multiple contacts, overlapping reports or interrupt service delays over 32 ms cancel the contact until release. Changing display rotation clears queued contacts.
+
 Each contact produces at most one action. A swipe cannot also become a tap. Long holds, diagonal drags and cancelled contacts are ignored.
 
 ## Timing, gaze and typography
@@ -229,3 +245,9 @@ To verify a change reached the screen, wait for `rendered_seq` to match the sent
 `showCardBackgrounds` is an optional boolean. Missing or false leaves usage and HEY cards on the black screen; true shows their dark panels. Borderless usage sections use larger percentages and closer spacing. HEY keeps the same text and layout. The playground saves this preference under Device > Display.
 
 The optional boolean `nameShimmer` animates the Face session subtitle in Geist Sans16 at its existing position. The host cycles working session names every four seconds in All agents; name changes do not restart the face animation. Missing or false keeps the subtitle static. Local previews, non-Face modules and host disconnection suppress subtitle shimmer. Mapped Grok clips support it. ACK diagnostics report `name_shimmer_pixels`.
+
+### Now Playing sources
+
+The `roon` module also displays Spotify and macOS Now Playing using the same artwork and controls. Optional dashboard `player` values are `roon`, `spotify` and `system`; older frames default to `roon`. Optional boolean `canLike` and `liked` fields control the heart action and its saved state. The source badge sits at the artwork's top left (System has no badge), and the heart sits at its bottom right. Expanded artwork hides both overlays.
+
+When `pageCount` is greater than one, vertical swipes send `{"type":"roon-player","v":1,"direction":1}` or direction `-1`, even when a source is unavailable. Horizontal swipes still select modules. Tapping a supported heart sends `{"type":"roon-control","v":1,"action":"like","player":"spotify"}`. Playback controls include the player captured on touch. The bridge rejects controls queued for a different source and performs supported actions.

@@ -1,7 +1,7 @@
 import CompanionMark from './components/CompanionMark'
 import { version as appVersion } from '../package.json'
 import { useEffect, useId, useState, type ReactNode } from 'react'
-import { Activity, Bell, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, Check, ChevronDown, ChevronRight, CircleHelp, Clock, Cpu, Download, Eye, LayoutDashboard, Mail, Monitor, Music2, Moon, Sun, MousePointer2, Play, Plus, Radio, RefreshCw, RotateCcw, Search, Settings2, Shapes, SlidersHorizontal, Smile, Sparkles, Unplug, Wifi, X, type LucideIcon } from 'lucide-react'
+import { Activity, Bell, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, Check, ChevronDown, ChevronRight, CircleHelp, Clock, Cpu, Download, Eye, LayoutDashboard, Mail, Monitor, Music2, Volume2, Moon, Sun, MousePointer2, Play, Plus, Radio, RefreshCw, RotateCcw, Search, Settings2, Shapes, SlidersHorizontal, Smile, Sparkles, Unplug, Wifi, X, type LucideIcon } from 'lucide-react'
 import { Toaster, toast } from 'sonner'
 import { Button } from './components/ui/button'
 import { Badge } from './components/ui/badge'
@@ -17,6 +17,7 @@ import Attention from './components/Attention'
 import Logs from './components/Logs'
 import AppSettings from './components/AppSettings'
 import RoonSettings from './components/RoonSettings'
+import AudioSettings from './components/AudioSettings'
 import Face from './components/face/Face'
 import { animationName, animations, boxes, moduleNames, relativeTime, resetTime, statusDescriptions, statusNames, useStudio, type ModuleId, type Source, type Status, type StudioSnapshot } from './lib/studio'
 
@@ -31,7 +32,7 @@ const navigation: {id:Page;label:string;icon:LucideIcon;description:string}[] = 
   {id:'app-settings',label:'Settings',icon:Settings2,description:'Startup, updates, command line and agent skills.'},
 ]
 type Page = 'overview' | 'animations' | 'modules' | 'device' | 'designer' | 'attention' | 'logs' | 'app-settings'
-const moduleIcons = {face:Smile,usage:Activity,hey:Mail,clock:Clock,roon:Music2}
+const moduleIcons = {face:Smile,usage:Activity,hey:Mail,clock:Clock,roon:Music2,audio:Volume2}
 const statusList: Status[] = ['working','blocked','done','idle','unknown','disconnected']
 const readPage = (): Page => navigation.some(n => n.id === location.hash.slice(1)) ? location.hash.slice(1) as Page : 'overview'
 type Save = (patch: unknown, message?: string) => Promise<boolean>
@@ -51,7 +52,7 @@ function SettingRow({title,description,children}:{title:string;description:strin
   return <div className="setting-row"><div><h3>{title}</h3><p>{description}</p></div><div className="setting-control">{children}</div></div>
 }
 function SourceBadge({source,enabled,network=false}:{source:Source;enabled:boolean;network?:boolean}) {
-  const label = source.installed === false ? 'CLI not found' : source.installed === null ? 'Detecting CLI' : !enabled ? network ? 'Off' : 'CLI detected' : source.refreshing && source.status === 'ready' ? 'Checking' : source.status === 'ready' ? 'Connected' : source.status === 'loading' ? 'Connecting' : source.status === 'auth-required' ? network ? 'Enable in Roon' : 'Sign in needed' : 'Needs attention'
+  const label = !network && source.installed === false ? 'CLI not found' : !network && source.installed === null ? 'Detecting CLI' : !enabled ? network ? 'Off' : 'CLI detected' : source.refreshing && source.status === 'ready' ? 'Checking' : source.status === 'ready' ? 'Connected' : source.status === 'loading' ? 'Connecting' : source.status === 'auth-required' ? network ? 'Permission needed' : 'Sign in needed' : 'Needs attention'
   return <Badge variant="secondary" className={`source-badge ${source.status==='ready'&&enabled?'is-good':''}`}><StatusDot state={source.refreshing||source.status==='loading'?'working':source.status==='ready'&&enabled?'connected':'idle'} />{label}</Badge>
 }
 function Thumbnail({id,className=''}:{id:string|null;className?:string}) {
@@ -101,7 +102,7 @@ export default function App() {
             {page==='attention'&&<Attention snapshot={snapshot} pending={pending||!online} action={action}/>}
             {page==='device'&&<DeviceSettings snapshot={snapshot} pending={pending||!online} action={action} save={save}/>}
           </>}
-        </div><aside className="preview-column" aria-label="Live device preview"><DevicePreview snapshot={snapshot} online={online} pending={pending||!online} localAnimation={localAnimation} localReplay={localReplay} onModule={switchModule} onLive={returnLive} onUsagePage={direction=>void action('usage/page',{direction})} onHeyPage={direction=>void action('hey/page',{direction})} onOpenCard={request=>void action('open-card',request)} onRoonControl={control=>void action('roon/control',{action:control})} onRoonView={expanded=>void action('roon/view',{expanded})}/>{localAnimation!==undefined&&<div className="audition-actions"><div><Eye size={15}/><span>Previewing <strong>{animationName(localAnimation)}</strong></span></div><Button disabled={pending||!online||!snapshot?.settings.modules.face.enabled} onClick={async()=>{if(await action('expression',{expression:localAnimation},'Animation sent to your device'))setLocalAnimation(undefined)}}><Play size={14}/>Send to device</Button></div>}</aside></div>}
+        </div><aside className="preview-column" aria-label="Live device preview"><DevicePreview snapshot={snapshot} online={online} pending={pending||!online} localAnimation={localAnimation} localReplay={localReplay} onModule={switchModule} onLive={returnLive} onUsagePage={direction=>void action('usage/page',{direction})} onHeyPage={direction=>void action('hey/page',{direction})} onOpenCard={request=>void action('open-card',request)} onRoonControl={(control,player)=>void action('roon/control',{action:control,player})} onRoonPage={direction=>void action('roon/player',{direction})} onRoonView={expanded=>void action('roon/view',{expanded})} onAudioControl={request=>void action('audio/control',request)} onAudioView={request=>void action('audio/view',request)} onAudioPage={direction=>void action('audio/page',{direction})}/>{localAnimation!==undefined&&<div className="audition-actions"><div><Eye size={15}/><span>Previewing <strong>{animationName(localAnimation)}</strong></span></div><Button disabled={pending||!online||!snapshot?.settings.modules.face.enabled} onClick={async()=>{if(await action('expression',{expression:localAnimation},'Animation sent to your device'))setLocalAnimation(undefined)}}><Play size={14}/>Send to device</Button></div>}</aside></div>}
       </main>
     </div>
     <Dialog open={help} onOpenChange={setHelp}><DialogContent className="guide-dialog"><DialogHeader><DialogTitle>A little companion for your desk</DialogTitle><DialogDescription>Everything runs through the local bridge on this computer.</DialogDescription></DialogHeader><ol className="guide-steps"><li><span>01</span><div><h3>Connect your screen</h3><p>Plug your Waveshare in over USB. Device settings show its connection status.</p></div></li><li><span>02</span><div><h3>Choose what matters</h3><p>Enable Herdr Face, CodexBar, HEY or Clock in Modules. Installed CLIs are detected automatically.</p></div></li><li><span>03</span><div><h3>Make it yours</h3><p>Map animations to agent states. Swipe left or right on the device to switch enabled modules; tap the face to cycle agents.</p></div></li></ol><p className="guide-footnote">HEY shows senders and subjects without reading message bodies. The studio cannot send email or change your inbox.</p></DialogContent></Dialog>
@@ -123,12 +124,12 @@ function Overview({snapshot:s,pending,action,navigate}:PageProps&{navigate:(page
       <div className="agent-list">{agents.length?agents.map(agent=><button key={agent.id} className={`agent-row ${s.selected===agent.id&&s.module==='face'?'selected':''}`} disabled={pending||!s.settings.modules.face.enabled} onClick={()=>void action('select',{id:agent.id})}><span className={`agent-avatar agent-${agent.kind.toLowerCase()}`}>{agent.kind.slice(0,1).toUpperCase()}</span><span className="agent-info"><strong>{agent.name}</strong><small>{agent.project||'No project'}<span>/</span>{agent.kind}</small></span><span className="agent-state"><StatusDot state={agent.state}/>{statusNames[agent.state]||agent.state}</span>{s.selected===agent.id&&s.module==='face'&&<Check size={14}/>}</button>):<div className="empty-state"><Radio size={25}/><h3>{search?'No matching agents':s.connected?'Room for your next idea':'Waiting for Herdr'}</h3><p>{search?'Try a different name or project.':s.connected?'Start an agent in Herdr and it will appear here.':'Open Herdr on this computer. Your agents will appear as soon as it connects.'}</p></div>}</div>
       <div className="panel-footnote"><CircleHelp size={13}/>{s.settings.modules.face.enabled?'Tap the face on your device to cycle through agents.':'Enable Herdr Face in Modules to follow agents on your device.'}</div>
     </Panel>
-    <Panel title="More than a face" description="Bring the rest of your day into view." className="module-shortcuts">{(['usage','hey','clock','roon'] as const).map(id=>{
+    <Panel title="More than a face" description="Bring the rest of your day into view." className="module-shortcuts">{(['usage','hey','clock','roon','audio'] as const).map(id=>{
       const Icon=moduleIcons[id]
       return <button className="shortcut-row" key={id} onClick={()=>navigate('modules')}>
         <span className={`module-icon module-${id}`}><Icon size={19}/></span>
-        <span><strong>{moduleNames[id]}</strong><small>{id==='usage'?'Your AI usage, at a glance':id==='hey'?'A quieter view of your inbox':id==='roon'?'Your music, within reach':'A little space for the time'}</small></span>
-        {id==='clock'?<Badge variant="secondary">Built in</Badge>:<SourceBadge source={s.modules[id]} enabled={s.settings.modules[id].enabled} network={id==='roon'}/>}
+        <span><strong>{moduleNames[id]}</strong><small>{id==='usage'?'Your AI usage, at a glance':id==='hey'?'A quieter view of your inbox':id==='roon'?'Your music, within reach':id==='audio'?'Sound, at your fingertips':'A little space for the time'}</small></span>
+        {id==='audio'?<Badge variant="secondary">Mac audio</Badge>:id==='clock'?<Badge variant="secondary">Built in</Badge>:<SourceBadge source={s.modules[id]} enabled={s.settings.modules[id].enabled} network={id==='roon'}/>}
         <ChevronRight size={16}/>
       </button>
     })}</Panel>
@@ -163,6 +164,7 @@ function Modules({snapshot:s,pending,save,action}:PageProps) {
     hey:'Keep a little space for your inbox.',
     clock:'The time, with a little room to breathe.',
     roon:'Your music, within reach.',
+    audio:'Control your microphone and speakers.',
   }
   const move=(id:ModuleId,direction:number)=>{
     const next=[...order], index=next.indexOf(id), target=index+direction
@@ -182,8 +184,8 @@ function Modules({snapshot:s,pending,save,action}:PageProps) {
           <Switch checked={config.enabled} disabled={pending||(config.enabled&&enabled.length===1)} aria-label={`Enable ${moduleNames[id]}`} onCheckedChange={checked=>void save({modules:{[id]:{enabled:checked}}},`${moduleNames[id]} ${checked?'enabled':'disabled'}`)}/>
         </div>
         <div className="module-meta">
-          {source?<SourceBadge source={source} enabled={config.enabled} network={id==='roon'}/>:id==='clock'?<Badge variant="secondary">Computer time</Badge>:<Badge variant="secondary" className={s.connected?'is-good':''}><StatusDot state={s.connected?'connected':'idle'}/>{s.connected?'Herdr connected':'Waiting for Herdr'}</Badge>}
-          <span className="module-meta-note">{id==='roon'?(s.modules.roon?.coreName||'Connect to your Roon server'):source?.version?`CLI ${source.version}`:id==='face'?'Live agent states':id==='clock'?'Updates automatically':source?.installed===true?'Detected on this computer':source?.installed===false?'Install the CLI to connect':'Checking this computer'}</span>
+          {source?<SourceBadge source={source} enabled={config.enabled} network={id==='roon'}/>:id==='audio'?<Badge variant="secondary" className={config.enabled&&s.modules.audio?.status==='ready'?'is-good':''}>{!config.enabled?'Off':s.modules.audio?.status==='ready'?'Connected':'Unavailable'}</Badge>:id==='clock'?<Badge variant="secondary">Computer time</Badge>:<Badge variant="secondary" className={s.connected?'is-good':''}><StatusDot state={s.connected?'connected':'idle'}/>{s.connected?'Herdr connected':'Waiting for Herdr'}</Badge>}
+          <span className="module-meta-note">{id==='audio'?(s.modules.audio?.deviceName||'Mac input and output'):id==='roon'?(s.modules.roon?.playerName||'Spotify, Apple Music, Roon and macOS'):source?.version?`CLI ${source.version}`:id==='face'?'Live agent states':id==='clock'?'Updates automatically':source?.installed===true?'Detected on this computer':source?.installed===false?'Install the CLI to connect':'Checking this computer'}</span>
           <div className="order-controls">
             <Button variant="ghost" size="icon-sm" aria-label={`Move ${moduleNames[id]} earlier`} disabled={pending||index===0} onClick={()=>move(id,-1)}><ArrowUp size={13}/></Button>
             <Button variant="ghost" size="icon-sm" aria-label={`Move ${moduleNames[id]} later`} disabled={pending||index===order.length-1} onClick={()=>move(id,1)}><ArrowDown size={13}/></Button>
@@ -193,7 +195,7 @@ function Modules({snapshot:s,pending,save,action}:PageProps) {
           <Button variant={s.module===id?'secondary':'outline'} disabled={!config.enabled||pending} onClick={()=>void action('module',{id},`${moduleNames[id]} is on your device`)}>{s.module===id?<Check size={14}/>:<Monitor size={14}/ >}{s.module===id?'On device':'Show on device'}</Button>
           {id!=='face'&&<Button variant="ghost" aria-expanded={expanded===id} onClick={()=>setExpanded(expanded===id?null:id)}>Configure<ChevronDown size={14} className={expanded===id?'turned':''}/></Button>}
         </div>
-        {expanded===id&&id!=='face'&&<div className="module-details">{id==='usage'?<UsageSettings snapshot={s} pending={pending} save={save} action={action}/>:id==='hey'?<HeySettings snapshot={s} pending={pending} save={save} action={action}/>:id==='roon'?<RoonSettings snapshot={s} pending={pending} save={save} action={action}/>:<ClockSettings snapshot={s} pending={pending} save={save} action={action}/>}</div>}
+        {expanded===id&&id!=='face'&&<div className="module-details">{id==='usage'?<UsageSettings snapshot={s} pending={pending} save={save} action={action}/>:id==='hey'?<HeySettings snapshot={s} pending={pending} save={save} action={action}/>:id==='roon'?<RoonSettings snapshot={s} pending={pending} save={save} action={action}/>:id==='audio'?<AudioSettings snapshot={s} pending={pending} action={action}/>:<ClockSettings snapshot={s} pending={pending} save={save} action={action}/>}</div>}
       </Panel>
     })}</div>
     <Panel title="Swipe navigation" description="Your enabled modules appear in this order."><div className="module-order">{enabled.map((id,index)=><div key={id}>{index>0&&<ChevronRight size={14}/>}<span>{index+1}<strong>{moduleNames[id]}</strong></span></div>)}</div><SettingRow title="Swipe to switch" description="Swipe left or right on the physical screen."><Switch checked={s.settings.device.swipeEnabled} disabled={pending} aria-label="Swipe to switch modules" onCheckedChange={value=>void save({device:{swipeEnabled:value}})}/></SettingRow></Panel>

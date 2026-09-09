@@ -77,7 +77,7 @@ test('module activation and queued swipes preserve order and skip disabled modul
   const { settings, store, filePath } = await fixture(t); await settings.load();
   await settings.save({ modules: { usage: { enabled: false }, hey: { enabled: false }, clock: { enabled: false } } });
   await assert.rejects(settings.activateModule('usage'), /Enable/);
-  await settings.save({ modules: { usage: { enabled: true }, hey: { enabled: true } }, device: { moduleOrder: ['hey', 'face', 'usage', 'clock', 'roon'] } });
+  await settings.save({ modules: { usage: { enabled: true }, hey: { enabled: true } }, device: { moduleOrder: ['hey', 'face', 'usage', 'clock', 'roon', 'audio'] } });
   await Promise.all([settings.cycleModule(1), settings.cycleModule(1)]);
   assert.equal(store.activeModule, 'hey'); assert.equal(JSON.parse(await readFile(filePath, 'utf8')).device.activeModule, 'hey');
   await settings.save({ modules: { usage: { enabled: false } } });

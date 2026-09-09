@@ -43,7 +43,7 @@ test('module protocol retains legacy defaults and distinguishes missing values f
 test('module parser rejects invalid kinds, positions and truncated or oversized metric data', needsIdf, () => {
   const invalid = [
     { module: 'calendar' }, { module: null }, { moduleIndex: 1 }, { moduleCount: 2 },
-    { moduleIndex: 3, moduleCount: 3 }, { moduleIndex: 0, moduleCount: 0 }, { moduleIndex: 0, moduleCount: 6 },
+    { moduleIndex: 3, moduleCount: 3 }, { moduleIndex: 0, moduleCount: 0 }, { moduleIndex: 0, moduleCount: 7 },
     { moduleIndex: 0.5, moduleCount: 2 }, { dashboard: null },
     ...[null, 'true', 1, []].map(showModuleNavigation => ({ showModuleNavigation })),
     ...['missing', null, 1, true].map(status => ({ dashboard: { status } })),
@@ -242,4 +242,44 @@ test('device theme validates all semantic color tokens and preserves legacy fram
     const missing={...palette};delete missing[key];assert.equal(parse({palette:missing})[0],null);
   }
   for(const theme of [null,1,true,'system','blue'])assert.equal(parse({theme})[0],null);
+});
+
+
+test('Now Playing sources retain navigation while unavailable and bound like flags', needsIdf, () => {
+  const frames = ['roon', 'spotify', 'system', 'appleMusic'].map((player, pageIndex) => ({module: 'roon', dashboard: {
+    status: 'unavailable', player, pageIndex, pageCount: 4, canLike: player === 'spotify', liked: player === 'spotify',
+  }}));
+  const results = parse(...frames);
+  results.forEach((result, index) => {
+    assert.equal(result.player, index); assert.equal(result.pageCount, 4); assert.equal(result.pageIndex, index);
+    assert.equal(result.canLike, index === 1); assert.equal(result.liked, index === 1);
+  });
+  const legacy = parse({module: 'roon', dashboard: {status: 'loading'}})[0];
+  assert.equal(legacy.player, 0); assert.equal(legacy.canLike, false); assert.equal(legacy.liked, false);
+  const invalid = [{player: 'other'}, {player: null}, {player: 1}, {canLike: 'true'}, {liked: 1}, {liked: null}];
+  assert.deepEqual(parse(...invalid.map(fields => ({module: 'roon', dashboard: {status: 'loading', ...fields}}))), invalid.map(() => null));
+});
+
+
+test('Audio preserves input/output device targets and rejects malformed controls', needsIdf, () => {
+  const dashboard = {status:'ready',scope:'output',deviceId:17,deviceName:'Built-in speakers',nextDeviceId:42,deviceCount:2,volume:52.5,muted:false,canVolume:true,canMute:true,pageIndex:0,pageCount:2};
+  const result = parse({module:'audio',moduleIndex:5,moduleCount:6,dashboard})[0];
+  assert.equal(result.kind,5); assert.equal(result.modules,6); assert.equal(result.audioDevice,17);
+  assert.equal(result.audioNextDevice,42); assert.equal(result.audioDeviceCount,2); assert.equal(result.audioInput,0); assert.equal(result.audioVolume,52.5); assert.equal(result.audioCanVolume,1); assert.equal(result.audioCanMute,1);
+  const input = parse({module:'audio',dashboard:{...dashboard,scope:'input',pageIndex:1,muted:true}})[0];
+  assert.equal(input.audioInput,1); assert.equal(input.audioMuted,1);
+  const unavailable = parse({module:'audio',dashboard:{...dashboard,status:'unavailable',deviceId:0,volume:null,muted:null}})[0];
+  assert.equal(unavailable.pageCount,2); assert.equal(unavailable.audioCanVolume,0); assert.equal(unavailable.audioCanMute,0);
+  const invalid = [{nextDeviceId:-1},{nextDeviceId:0x100000000},{deviceCount:1.5},{scope:'other'},{scope:null},{deviceId:-1},{deviceId:1.5},{deviceId:0x100000000},{deviceName:'x'.repeat(65)},{volume:101},{volume:-1},{volume:'50'},{muted:0},{canVolume:null},{canMute:'true'},{pageIndex:1},{pageCount:3}];
+  assert.deepEqual(parse(...invalid.map(fields=>({module:'audio',dashboard:{...dashboard,...fields}}))),invalid.map(()=>null));
+});
+
+
+test('Audio picker accepts visible device pages and rejects malformed rows',needsIdf,()=>{
+  const dashboard={status:'ready',scope:'output',deviceId:17,deviceName:'Speakers',volume:50,muted:false,canVolume:true,canMute:true,pickerOpen:true,pageIndex:2,pageCount:3,devices:[{id:17,name:'Speakers',active:true},{id:42,name:'External DAC',active:false}]};
+  const value=parse({module:'audio',dashboard})[0];
+  assert.equal(value.audioPicker,1);assert.equal(value.audioRows,2);assert.deepEqual(value.audioRowIDs,[17,42,0]);assert.equal(value.pageIndex,2);
+  const invalid=[{pickerOpen:'true'},{devices:null},{devices:Array(4).fill(dashboard.devices[0])},{devices:[{id:0,name:'Bad',active:false}]},{devices:[{id:42,name:'x'.repeat(65),active:false}]},{devices:[{id:42,name:'Bad',active:1}]},{devices:[dashboard.devices[0],dashboard.devices[0]]}];
+  assert.deepEqual(parse(...invalid.map(fields=>({module:'audio',dashboard:{...dashboard,...fields}}))),invalid.map(()=>null));
+  const missing={...dashboard};delete missing.devices;assert.equal(parse({module:'audio',dashboard:missing})[0],null);
 });
