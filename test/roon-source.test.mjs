@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { setImmediate as turn } from 'node:timers/promises';
+import { setImmediate as turn, setTimeout as delay } from 'node:timers/promises';
 import sharp from 'sharp';
 import { RoonSource } from '../bridge/roon-source.mjs';
 
@@ -56,7 +56,9 @@ test('Roon pairing persists privately and ignores callbacks after reconfiguratio
   source.configure({ enabled: false, host: '', zoneId: '' }); connection.notify('Changed', { zones_changed: [zone('late')] });
   first.options.core_paired(connection.core); assert.equal(source.snapshot().status, 'disabled'); assert.deepEqual(source.snapshot().zones, []);
   source.configure({ enabled: true, host: '', zoneId: '' });
-  for (let i = 0; i < 20 && instances.length < 2; i++) await turn();
+  const deadline = Date.now() + 2000;
+  while (instances.length < 2 && Date.now() < deadline) await delay(10);
+  assert.equal(instances.length, 2, 'Roon reconnects after loading the saved pairing');
   assert.equal(instances[1].options.get_persisted_state().tokens.core1, 'private-token'); assert.equal(instances[1].discovering, true); assert.equal(instances[1].manualOptions, undefined);
 });
 

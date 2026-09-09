@@ -1,5 +1,5 @@
 import { bundleRuntime, signingTargets, validateNode } from './bundle-menubar.mjs';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -25,6 +25,9 @@ const tools = path.join(root, '.tools');
 const destination = path.join(tools, 'Companion.app');
 const packageInfo = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
 const version = process.env.COMPANION_VERSION || packageInfo.version;
+let commit = '';
+try { commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch {}
+if (!/^[a-f0-9]{40}$/.test(commit)) commit = '';
 if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) throw new Error('Version must be numeric major.minor.patch.');
 const xml = value => String(value).replace(/[<>&"']/g, char => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[char]);
 const run = (command, args) => new Promise((resolve, reject) => {
@@ -57,6 +60,7 @@ try {
 <key>CFBundleIconName</key><string>Companion</string>
 <key>CFBundleShortVersionString</key><string>${xml(version)}</string>
 <key>CFBundleVersion</key><string>${xml(version)}</string>
+${commit ? `<key>CompanionCommit</key><string>${commit}</string>` : ''}
 <key>LSMinimumSystemVersion</key><string>${bundled ? '13.5' : '13.0'}</string>
 <key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>

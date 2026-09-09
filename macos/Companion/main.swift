@@ -50,6 +50,7 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let updateReminder = NSMenuItem(title: "A new update is available...", action: #selector(checkForUpdates), keyEquivalent: "")
     let updateSeparator = NSMenuItem.separator()
     var updateBadge: NSView?
+    var aboutWindow: NSWindow?
     var config: Configuration!
     var dataFolder: URL?
     #if SPARKLE
@@ -373,12 +374,102 @@ final class CompanionApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     @objc func showAbout() {
         NSApp.activate(ignoringOtherApps: true)
-        NSApp.orderFrontStandardAboutPanel(options: [
-            .applicationName: "Companion",
-            .applicationVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown",
-            .version: "",
-            .credits: NSAttributedString(string: "Your desk companion for agents, updates and everyday tools.")
+        if let aboutWindow { aboutWindow.makeKeyAndOrderFront(nil); return }
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 437),
+                              styleMask: [.titled, .closable, .fullSizeContentView],
+                              backing: .buffered, defer: false)
+        window.title = "About Companion"
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.isReleasedWhenClosed = false
+        let content = NSView()
+        window.contentView = content
+
+        func label(_ text: String, size: CGFloat, weight: NSFont.Weight = .regular,
+                   color: NSColor = .labelColor) -> NSTextField {
+            let field = NSTextField(wrappingLabelWithString: text)
+            field.font = .systemFont(ofSize: size, weight: weight)
+            field.textColor = color
+            field.alignment = .center
+            field.translatesAutoresizingMaskIntoConstraints = false
+            content.addSubview(field)
+            return field
+        }
+        let icon = NSImageView()
+        icon.image = NSApp.applicationIconImage
+        icon.imageScaling = .scaleProportionallyUpOrDown
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(icon)
+        let name = label("Companion", size: 22, weight: .bold)
+        let description = label("Your desk companion for agents,\nupdates and everyday tools.", size: 11, color: .secondaryLabelColor)
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? version
+        let commit = Bundle.main.object(forInfoDictionaryKey: "CompanionCommit") as? String
+        func detailField(_ text: String, monospaced: Bool = false) -> NSTextField {
+            let field = NSTextField(labelWithString: text)
+            field.font = monospaced ? .monospacedSystemFont(ofSize: 12, weight: .regular) : .systemFont(ofSize: 12)
+            field.textColor = monospaced ? .secondaryLabelColor : .labelColor
+            return field
+        }
+        let commitButton = NSButton(title: commit.map { String($0.prefix(8)) } ?? "Local build",
+                                    target: self, action: #selector(openCommit))
+        commitButton.isBordered = false
+        commitButton.focusRingType = .none
+        commitButton.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        commitButton.contentTintColor = commit == nil ? .secondaryLabelColor : .linkColor
+        commitButton.isEnabled = commit != nil
+        commitButton.setAccessibilityLabel(commit.map { "View commit " + String($0.prefix(8)) + " on GitHub" } ?? "Local build")
+        let details = NSGridView(views: [
+            [detailField("Version"), detailField(version, monospaced: true)],
+            [detailField("Build"), detailField(build, monospaced: true)],
+            [detailField("Commit"), commitButton]
         ])
+        details.columnSpacing = 8
+        details.rowSpacing = 2
+        details.column(at: 0).xPlacement = .trailing
+        details.column(at: 1).xPlacement = .leading
+        details.rowAlignment = .firstBaseline
+        details.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(details)
+        let docs = NSButton(title: "Docs", target: self, action: #selector(openDocs))
+        let github = NSButton(title: "GitHub", target: self, action: #selector(openGitHub))
+        for button in [docs, github] {
+            button.bezelStyle = .rounded
+            button.controlSize = .large
+        }
+        let links = NSStackView(views: [docs, github])
+        links.orientation = .horizontal
+        links.spacing = 8
+        links.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(links)
+        NSLayoutConstraint.activate([
+            icon.topAnchor.constraint(equalTo: content.topAnchor, constant: 80),
+            icon.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 108), icon.heightAnchor.constraint(equalToConstant: 108),
+            name.topAnchor.constraint(equalTo: icon.bottomAnchor, constant: 20),
+            name.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+            description.topAnchor.constraint(equalTo: name.bottomAnchor, constant: 8),
+            description.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+            description.widthAnchor.constraint(equalToConstant: 260),
+            details.topAnchor.constraint(equalTo: description.bottomAnchor, constant: 30),
+            details.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+            links.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -30),
+            links.centerXAnchor.constraint(equalTo: content.centerXAnchor)
+        ])
+        window.center()
+        aboutWindow = window
+        window.makeKeyAndOrderFront(nil)
+    }
+    @objc func openDocs() {
+        NSWorkspace.shared.open(URL(string: "https://github.com/ahkohd/companion#readme")!)
+    }
+    @objc func openGitHub() {
+        NSWorkspace.shared.open(URL(string: "https://github.com/ahkohd/companion")!)
+    }
+    @objc func openCommit() {
+        guard let commit = Bundle.main.object(forInfoDictionaryKey: "CompanionCommit") as? String,
+              commit.range(of: "^[a-f0-9]{40}$", options: .regularExpression) != nil else { return }
+        NSWorkspace.shared.open(URL(string: "https://github.com/ahkohd/companion/commit/" + commit)!)
     }
     @objc func checkForUpdates() {
         NSApp.activate(ignoringOtherApps: true)
