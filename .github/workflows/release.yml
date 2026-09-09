@@ -45,6 +45,22 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Select Xcode with Icon Composer support
+        run: |
+          XCODE=$(python3 - <<'PYTHON'
+          import glob, re
+          candidates = []
+          for app in glob.glob('/Applications/Xcode*.app'):
+              match = re.search(r'Xcode_(\d+)(?:\.(\d+))?(?:\.(\d+))?\.app$', app)
+              if match:
+                  version = tuple(int(part or 0) for part in match.groups())
+                  if version[0] >= 26: candidates.append((version, app))
+          if not candidates: raise SystemExit('Xcode 26 or newer is required for the Companion icon.')
+          print(max(candidates)[1])
+          PYTHON
+          )
+          sudo xcode-select --switch "$XCODE/Contents/Developer"
+          xcodebuild -version
       - uses: actions/setup-node@v4
         with:
           node-version: '24.12.0'

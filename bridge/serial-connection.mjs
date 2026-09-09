@@ -18,7 +18,7 @@ function portsFrom(rows) {
 export class SerialConnection {
   constructor(store, { link, filePath = '.cache/device-connection.json', port = process.env.ESP_SERIAL_PORT || '', listPorts = () => SerialPort.list(), interval = 3000 } = {}) {
     this.store = store; this.link = link; this.filePath = filePath; this.listPorts = listPorts; this.interval = interval;
-    this.config = { mode: port ? 'auto' : 'off', path: normalizeSerialPath(port), serialNumber: '' };
+    this.config = { mode: 'auto', path: normalizeSerialPath(port), serialNumber: '' };
     this.ports = []; this.error = null; this.scanning = false; this.activePath = ''; this.stopped = true; this.queue = Promise.resolve();
   }
   snapshot() { return { ...this.config, ports: this.ports.map(port => ({ ...port })), scanning: this.scanning, error: this.error }; }

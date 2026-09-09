@@ -16,7 +16,7 @@ async function fixture(t, port='') {
  return {manager,link,calls,store,setRows(value){rows=value},fail(value){failure=value}};
 }
 test('off stays browser-only; manual persists serial and follows its moved path',async t=>{
- const f=await fixture(t);f.setRows([board('/dev/tty.usbmodem1')]);await f.manager.start();assert.equal(f.link.stopped,true);
+ const f=await fixture(t);f.setRows([board('/dev/tty.usbmodem1')]);await f.manager.configure({mode:'off'});await f.manager.start();assert.equal(f.link.stopped,true);
  await f.manager.configure({mode:'manual',path:'/dev/cu.usbmodem1'});assert.equal(f.link.path,'/dev/cu.usbmodem1');
  f.setRows([board('/dev/cu.usbmodem9'),board('/dev/cu.usbmodem2','OTHER')]);await f.manager.refresh();assert.equal(f.link.path,'/dev/cu.usbmodem9');
  assert.equal(JSON.parse(await readFile(f.manager.filePath)).serialNumber,'ABC');
@@ -65,4 +65,9 @@ test('remembered manual USB identity rejects an unrelated device with the same s
 test('manual selection disambiguates multiple ports with the same identity',async t=>{
  const f=await fixture(t);f.setRows([board('/a'),board('/b')]);await f.manager.start();
  await f.manager.configure({mode:'manual',path:'/b'});assert.equal(f.link.path,'/b');
+});
+
+test('fresh installation automatically discovers a compatible device without a port setting',async t=>{
+ const f=await fixture(t);f.setRows([board('/new-device')]);await f.manager.start();
+ assert.equal(f.manager.snapshot().mode,'auto');assert.equal(f.link.path,'/new-device');assert.equal(f.link.stopped,false);
 });

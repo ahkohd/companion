@@ -40,6 +40,7 @@ try {
   await mkdir(path.join(contents, 'MacOS'), { recursive: true });
   await mkdir(path.join(contents, 'Resources'), { recursive: true });
   const resources = path.join(contents, 'Resources');
+  await run('/usr/bin/xcrun', ['actool', '--compile', resources, '--app-icon', 'Companion', '--include-all-app-icons', '--output-partial-info-plist', path.join(temporary, 'icon-info.plist'), '--platform', 'macosx', '--minimum-deployment-target', bundled ? '13.5' : '13.0', path.join(root, 'macos/Companion/Companion.icon')]);
   if (bundled) await bundleRuntime({ root, resources, node: officialNode, run, arch });
   if (release) { await mkdir(path.join(contents, 'Frameworks'), { recursive: true }); await cp(sparkleFramework, path.join(contents, 'Frameworks/Sparkle.framework'), { recursive: true, verbatimSymlinks: true }); await cp(path.join(path.dirname(sparkleFramework), 'LICENSE'), path.join(resources, 'Licenses/Sparkle-LICENSE')); }
   const config = bundled ? { root: 'runtime', node: 'node', path: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', port: 4317, bundled: true } : { root, node: process.execPath, path: process.env.PATH || '/usr/bin:/bin:/usr/sbin:/sbin', port: 4317 };
@@ -52,6 +53,8 @@ try {
 <key>CFBundleDisplayName</key><string>Companion</string>
 <key>CFBundleExecutable</key><string>Companion</string>
 <key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleIconFile</key><string>Companion</string>
+<key>CFBundleIconName</key><string>Companion</string>
 <key>CFBundleShortVersionString</key><string>${xml(version)}</string>
 <key>CFBundleVersion</key><string>${xml(version)}</string>
 <key>LSMinimumSystemVersion</key><string>${bundled ? '13.5' : '13.0'}</string>
