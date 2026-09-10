@@ -71,7 +71,7 @@ export async function bundleRuntime({ root, resources, node, run, arch }) {
   await run('/usr/bin/xcrun', ['swiftc', '-O', '-target', `${arch}-apple-macosx13.0`, path.join(runtime, 'scripts/pointer.swift'), '-o', path.join(runtime, '.tools/bin/herdr-pointer')]);
   const licenses = path.join(resources, 'Licenses'); await mkdir(licenses, { recursive: true });
   await cp(path.join(path.dirname(path.dirname(node)), 'LICENSE'), path.join(licenses, 'Node-LICENSE'));
-  for (const [source, name] of [['fonts/geist/OFL.txt', 'Geist-OFL.txt'], ['web/vendor/bloub/LICENSE', 'Bloub-LICENSE'], ['web/vendor/grok-bot/LICENSE', 'Grok-LICENSE'], ['public/icons/reicon/LICENSE.txt', 'Reicon-LICENSE.txt']]) await cp(path.join(root, source), path.join(licenses, name));
+  for (const [source, name] of [['fonts/geist/OFL.txt', 'Geist-OFL.txt'], ['web/vendor/bloub/LICENSE', 'Bloub-LICENSE'], ['public/icons/reicon/LICENSE.txt', 'Reicon-LICENSE.txt']]) await cp(path.join(root, source), path.join(licenses, name));
   return runtime;
 }
 

@@ -42,38 +42,6 @@ Expression parity correction:
 - A fresh independent review found no blockers. Fixed its remaining browser clock restart issue, added a regression test, then restarted the live bridge without reloading the test page. Browser geometry matched the new host clock within 0.01 in the rounded matrix values, and the board reconnected.
 - Final bridge is running, previous agent selection restored. Physical touch behaviour and panel appearance still require observation at the board; framebuffer and rendered-eye checks provide stronger evidence than state ACKs alone.
 
-Grok motion extraction:
-
-- Extracted the thinking pose, Gaussian pulse, cubic spin easing, diminishing
-  bounces and confetti from BIGAGENT commit
-  `c7a498f0275229bdbad67c93c29e070bb85bd91b`, with its MIT license and an
-  adaptation notice. Native particle parameters are generated from the same
-  seeded source used in the browser.
-- Native/browser parity tests cover all seven states at 181 samples through
-  the sequence and at long-running times, checking motion transforms, every
-  polygon vertex, alpha and colour. Completion stops after 2.2 seconds;
-  reconnecting to an old ready state does not replay it.
-- Raster tests cover concave star gaps, alpha blending, circular and label
-  clipping, edge antialiasing and invalid input bounds. Fixed a coverage-buffer
-  bug that could leave stale pixels between disjoint spans.
-- Inspected six browser/native frame pairs in ego-browser. Geometry and the
-  coloured burst match; comparison saved locally as `.work/animation-parity.png`.
-- Flashed the board and passed all seven states, mouse gaze, malformed-input
-  recovery and timeout readiness. Render diagnostics confirm 3 thinking dots,
-  20 celebration particles and 0 particles after completion. Recorded raster
-  times were about 15 ms for thinking and 25 ms for confetti, below 33 ms.
-  These measurements exclude LVGL blitting and display transfer.
-- Live playground clicks matched the board's decoration counts. Reloading
-  after completion did not replay it. Reduced motion stopped effects, and the
-  390px layout kept the session name below the smaller status without overflow.
-- Fresh review verified state-age handling and clipping. It identified excess
-  ACK snapshot broadcasts and a possible partial replay when leaving reduced
-  motion. ACK diagnostics now publish together; resuming motion catches up to
-  the host clock before sampling.
-
-- Final `npm run check`: 33 tests and the production build pass. Verified reduced-motion resume after a ready state aged past the completion sequence: no replay or extra spin. The bridge is running with the saved pointer settings restored. The previous selected agent had ended, so selection fell back to All agents.
-
-
 Mouse glide correction:
 
 - Replaced the 180 ms ease-out-quint gaze with a critically damped response
@@ -83,49 +51,12 @@ Mouse glide correction:
   and velocity under rapid direction changes, matching native geometry, and
   immediate reduced-motion updates even when the target is unchanged.
 - `npm run check`: 35 tests pass and the production build passes. Flashed the
-  firmware and passed the hardware state, decoration, gaze, malformed-input
+  firmware and passed the hardware state, gaze, malformed-input
   and reconnection checks.
 - In an isolated browser fixture using the real Vue Face component, observed
   the eye centre move through 12 intermediate positions across the screen.
   Focus emulation enabled continuous browser animation during the check.
 - Restored the saved live selection, expression and mouse update interval.
-
-Complete Grok collection (current):
-
-- All 39 named upstream states and eight actions extracted from the unmodified
-  pinned renderer. Capture tests verify deterministic output, finite geometry,
-  changing states and working action triggers. Exact double-spin and spin/burst
-  click behaviour is preserved.
-- All 47 generated clips decode losslessly. Browser and C players match frame
-  hashes through seeks, replays, loop seams, reduced motion and long uptime.
-  Native bilinear output matches browser pixels, with clipping above labels.
-- Library: 14,149,290 bytes of flash, 192 x 168 RGB565 frames at 24 fps. Clips
-  contain eight seconds; states loop from four seconds with a blended seam.
-  Full source is retained; this is a finite seeded capture of procedural motion.
-- Fixed an inherited startup setting that tried to copy the library into 8 MB
-  PSRAM. Clips now stay in flash, with a 64,512-byte decoded frame in PSRAM.
-  Firmware builds reject stale configurations that would copy rodata to PSRAM.
-- Firmware, bootloader and partition table verified against flash by esptool.
-  Final application size: 14,845,040 bytes. Original full flash backup retained.
-- `scripts/check-grok-device.py`: all 47 physical-device selections returned
-  source frame hashes matching browser decoding. Replay, invalid clip/epoch
-  rejection and return to status faces passed. Rendering was 19,320 to 33,512 us,
-  inside the 41,667 us budget for 24 fps clips. Timing excludes LVGL transfer.
-- `scripts/check-device.py`: all seven original states, eye shapes, thinking
-  dots, completion confetti, gaze, malformed input recovery and host timeout
-  passed. Original face raster times were 10,916 to 16,884 us; confetti 24,237 us.
-- Codec tests passed under address and undefined-behaviour sanitizers. Q16
-  scaling also passed sanitizer checks at extreme dimensions and gaze bounds.
-- Fresh independent review completed; actionable findings fixed. Explicit
-  epochs prevent small delivery jitter from restarting clip playback, replay
-  retries failed asset loads, and dropped browser frames use host clock time.
-- Ego browser: all 47 previews rendered, Happy selection reached the actual
-  device, Replay reset age to 53 ms, and the session caption remained below
-  status. At 390 px, document width remained 390 px. A deliberately blocked
-  clip fetch recovered after Replay; reduced motion selected the still frame.
-- Vite now includes the generated clip directory in the production build.
-  Temporary QA pages, static server, browser space and review workspaces removed.
-  Live selection and enabled mouse following at 1,000 ms restored.
 
 ## Working status line
 
@@ -136,8 +67,7 @@ Complete Grok collection (current):
   cycle. The firmware caches a 21,760-byte text mask when the label changes.
 - Browser checks covered a complete shimmer cycle, both label layouts,
   Ready, Idle and playground transitions, static text with browser reduced
-  motion, and the 390 px layout without overflow. Thinking previews retain
-  their original dots. Reduced motion remains a browser setting.
+  motion, and the 390 px layout without overflow. Reduced motion remains a browser setting.
 - All 60 tests and the production build pass. Native and browser colour
   samples match across the animation cycle and long uptime. Mask tests cover
   shape preservation, antialiasing and clipping; address and undefined
@@ -229,11 +159,11 @@ Working label update:
 
 Original bouncing dots removed (5 September 2026):
 
-- Removed the dot generator from the browser and native working accents. Both keep the gentle eye motion and use status shimmer in live view and playground previews, including previews without Herdr.
+- Removed the extra working dots from the browser and device. Both use status shimmer in live view and playground previews, including previews without Herdr.
 - The original playground buttons and captions now share the live labels: Working, Needs your input, Ready, Idle and Sleeping. The subtitle stays below the status at the saved spacing. Removed the browser-only static status bullet to match the board.
-- All 67 tests, TypeScript and the production build pass. Native and browser accents agree across their sequences; the working decoration layer is empty. A fresh independent review found no blocking bugs.
-- Flashed the 14,865,712-byte application and verified all flash hashes. Device checks pass for all seven states, zero working decorations, working preview shimmer, Ready confetti, all three text gaps, gaze, malformed input and host timeout. Baseline rendering took 10,569 to 16,364 us; the sampled celebration took 21,885 us.
-- Browser checks at desktop, 390 and 320 pixel widths confirm matching caption positions and spacing, no overflow, no working dots, moving shimmer, Ready confetti and static reduced motion. Older dot references above describe previous versions.
+- All 67 tests, TypeScript and the production build pass. The working decoration layer is empty. A fresh independent review found no blocking bugs.
+- Flashed the 14,865,712-byte application and verified all flash hashes. Device checks pass for all seven states, zero working decorations, working preview shimmer, all three text gaps, gaze, malformed input and host timeout. Baseline rendering took 10,569 to 16,364 us.
+- Browser checks at desktop, 390 and 320 pixel widths confirm matching caption positions and spacing, no overflow, no working dots, moving shimmer and static reduced motion. Older dot references above describe previous versions.
 
 Fixed text row heights (5 September 2026):
 
@@ -247,12 +177,12 @@ Fixed text row heights (5 September 2026):
 
 Replaced the Vue playground with React 19, Vite 8, Tailwind 4 and the requested shadcn b0/base-nova preset. The studio defaults to English left to right, with RTL and theme settings.
 
-- Automated checks: 112 tests passed after the integration and React migration. One additional compact usage-label regression test passes (113 tests in total). TypeScript and the production build pass. All 47 generated gallery thumbnails match decoded frames and use about 104 KB combined.
+- Automated checks: 112 tests passed after the integration and React migration. One additional compact usage-label regression test passes (113 tests in total). TypeScript and the production build pass.
 - Fresh independent review covered firmware, CLI adapters, persistent settings, API validation, React state and accessibility. Fixed HEY recovery after an initial timeout, slow refresh blocking controls, local Working shimmer parity, mapping-dialog auditions, icon navigation names, saved-provider visibility and stale pointer input during disconnect.
-- Browser checks in Ego: actual CLI detection, enabling both modules, live usage and partial HEY counts, saving Working to Celebrate while retaining the logical Working caption, 52 library entries, search, local audition, swipe navigation, module selection, mobile layout, dark mode and RTL. Settings updates persisted through the real bridge API. No mock mailbox or usage values were used.
+- Browser checks in Ego: actual CLI detection, enabling both modules, live usage and partial HEY counts, retaining logical Working captions with mapped expressions, search, local audition, swipe navigation, module selection, mobile layout, dark mode and RTL. Settings updates persisted through the real bridge API. No mock mailbox or usage values were used.
 - Firmware application: 14,876,272 bytes. ESP-IDF build and native parser/touch tests pass. Actual LVGL desktop renders were inspected for usage, HEY and missing-data states. HEY count uses a native Geist44 digit subset.
 - Flashed the bootloader, partition table and application to the connected Waveshare; esptool verified all written hashes.
-- `scripts/check-module-device.py` passes over USB: every usage connection state, HEY unknown/zero/lower-bound counts, native animation remapping with logical Working shimmer, explicit idle versus automatic sleep, live Grok mapping without shimmer, malformed-frame rejection and legacy recovery.
+- `scripts/check-module-device.py` passes over USB: every usage connection state, HEY unknown/zero/lower-bound counts, native animation remapping with logical Working shimmer, explicit idle versus automatic sleep, malformed-frame rejection and legacy recovery.
 - `scripts/check-device.py` passes over USB: all seven native states, actual rendered eye geometry, completion effects, shimmer, all three text gaps, gaze, malformed frames, recovery and host timeout.
 - End-to-end production bridge checks: real CodexBar and HEY modules reached the device and returned matching rendered-module acknowledgements. A saved Working-to-Celebrate mapping reached the board with logical Working and zero shimmer pixels. Original mappings, active face view and mouse preferences were restored afterward.
 
@@ -289,7 +219,7 @@ Applied Mean inspections 26-09-06-00.46.17, 26-09-06-00.46.35 and 26-09-06-00.47
 - Actual LVGL renders cover normal, low, empty, unknown, single and secondary-only usage cards, provider labels and long pills. HEY fixtures cover one to four cards, unknown, zero, lower bounds and large counts. Four-card layouts use 72-pixel cards to fit the round screen.
 - Independent review caught clipping for five-digit HEY counts. Both renderers now use Geist22 from 10000 upwards. Native renders verify 20000, 50000 and 9999+ without truncation. The reviewer confirmed the fix and found no remaining issues.
 - Ego browser checks verify touch paging, arrow keys, page buttons and wraparound. Long drags over 1.5 seconds are ignored. Light and dark views, all returned provider readouts, fitted pills, hidden shared captions, unknown and large mailbox values, and a 390-pixel viewport pass visual checks with no horizontal overflow.
-- Flashed application 14,877,808 bytes and verified its hash. Updated USB module checks pass for provider pages, maximum page bounds, four-card HEY counts, native and Grok face restoration, malformed frames and legacy recovery.
+- Flashed application 14,877,808 bytes and verified its hash. Updated USB module checks pass for provider pages, maximum page bounds, four-card HEY counts, native face restoration, malformed frames and legacy recovery.
 - Live production bridge checks reached all seven configured windows across four pages: four Codex windows and three Claude windows. Each page received a rendered acknowledgement, page wrapping passed, and HEY rendered from the real source. Original module, selected agent and saved settings were restored.
 - Closed the temporary browser task space and fixture server. The production bridge remains running on port 4317.
 
@@ -301,7 +231,7 @@ Applied Mean inspections 26-09-06-00.48.45, 26-09-06-00.49.33, 26-09-06-00.49.51
 - Native LVGL fixtures verify the new usage positions, single-card centring, long labels and simple loading, authentication, error and disconnected states. HEY card geometry stays consistent.
 - Ego browser checks confirm the two sidebar fonts, absent Modules tagline, exactly two labels in connection/error screens, no placeholder circles, 14-pixel pill padding and no horizontal overflow at 390 pixels.
 - Fresh independent review found no actionable issues.
-- Flashed application 14,877,664 bytes with hash verification. All USB module checks pass, including connection states, paging, HEY counts and restoration of native and Grok faces.
+- Flashed application 14,877,664 bytes with hash verification. All USB module checks pass, including connection states, paging, HEY counts and restoration of native faces.
 - Restarted the production bridge and confirmed the saved active module, usage page and settings, with a matching rendered-module acknowledgement. Live browser checks confirm the updated fonts, heading and cards. Temporary fixtures and the browser task space are closed.
 
 ## Background refresh - 6 September 2026
@@ -362,7 +292,7 @@ HEY Imbox list, 6 September 2026:
 - 74 targeted backend, protocol, store, server and native tests pass. Checks include malformed entries, Unicode fallback, bounded escaped frames, pagination, refresh retention, cancellation and empty mailboxes. Independent review checked worst-case frames below the 1024-byte limit.
 - Production web and ESP-IDF builds pass. Six native LVGL fixtures verify row positions, typography, truncation, empty states, optional backgrounds and Checking. Browser checks cover light and dark themes, 390-pixel width without overflow, buttons, arrow keys and vertical touch swipes. Fictional mail is used in visual artifacts.
 - Fixed review findings for unsupported font glyphs, two-line subject ellipsis and stale counts-only help copy. The full source list retains original supported text; the device and preview share glyph fallback and byte-bounded truncation.
-- Flashed application image 14,879,120 bytes. Esptool verified the written images. USB checks passed for connection states, cached refreshes, card backgrounds, empty and populated pages, bounded UTF-8, long subjects, malformed frames and Face/Grok regressions.
+- Flashed application image 14,879,120 bytes. Esptool verified the written images. USB checks passed for connection states, cached refreshes, card backgrounds, empty and populated pages, bounded UTF-8, long subjects, malformed frames and Face regressions.
 - Live Imbox returned 30 rows. The preview matched each row on the selected page, and a keyboard page change reached the live HEY dashboard. Restored the saved module, page, selected agent and settings; the board acknowledged the restored HEY view.
 
 USB diagnostics confirm rendering and state delivery. Native framebuffers provide visual checks; physical panel appearance and finger swipes still require observation at the board.
@@ -381,7 +311,7 @@ Clock module, 6 September 2026:
 - All 93 targeted backend, settings, source, HTTP/SSE, store, serial and native tests pass. Checks include midnight/day rollover with no Herdr or hardware, persistence, migration, strict time syntax and four-module navigation.
 - The native renderer checked all 2,880 daily 12-hour and 24-hour strings; maximum width is 296 of 400 px. Inspected normal, longest, 24-hour and weekday-hidden fixtures. Web and firmware builds pass.
 - Browser checks cover format changes, weekday visibility, reload persistence, enabling/disabling, reordering, horizontal swipes and light/dark mobile layouts. Fixed four module buttons overlapping the arrows in a 270 px preview; all six controls now fit. A fresh independent review found no other defects.
-- Flashed the 14,892,064-byte firmware image and verified it with esptool. USB checks passed for Clock formats, weekday visibility, four navigation dots, malformed-frame rejection and existing Usage, HEY, Face and Grok behavior.
+- Flashed the 14,892,064-byte firmware image and verified it with esptool. USB checks passed for Clock formats, weekday visibility, four navigation dots, malformed-frame rejection and existing Usage, HEY and Face behavior.
 - Enabled Clock with 12-hour time and weekday visible, preserving other saved preferences and appending Clock after the existing modules. The board reported Clock rendered. Observed the live preview advance from 2:09am to 2:10am. Opened the clock controls in the user's existing playground tab.
 
 Clock without am/pm, 6 September 2026:
@@ -407,9 +337,9 @@ Larger Clock time, 6 September 2026:
 Working session subtitle rotation, 6 September 2026:
 
 - Read Mean inspection 26-09-06-02.28.27 with its frame and region. All agents now cycles through working session names every four seconds in the existing 16-pixel subtitle row, with a muted shimmer. Attention titles remain intact; zero workers restores ready or idle counts.
-- Rotation retains session identity across ordinary updates and stops for individual sessions, explicit previews, inactive Face and disconnection. Subtitle changes preserve the face animation epoch and age. Mapped Grok and native faces both support the subtitle.
+- Rotation retains session identity across ordinary updates and stops for individual sessions, explicit previews, inactive Face and disconnection. Subtitle changes preserve the face animation epoch and age. Mapped native faces support the subtitle.
 - Added strict optional nameShimmer protocol support and independent native mask/diagnostics. Shared muted color and timing parity, UTF-8/long-name truncation, actual LVGL mask bounds and native parser selfchecks pass.
-- All 153 tests pass, including real HTTP/SSE rotation without hardware. Web and firmware builds pass. Browser checks cover cycling, stable size/position, long names, fallbacks, individual views, previews, attention, mapped Grok and reduced motion. Fresh independent review found no remaining defects.
+- All 153 tests pass, including real HTTP/SSE rotation without hardware. Web and firmware builds pass. Browser checks cover cycling, stable size/position, long names, fallbacks, individual views, previews, attention, mapped expressions and reduced motion. Fresh independent review found no remaining defects.
 - Flashed the 14,917,952-byte application with hash verification. Ten USB render checks passed. Restored saved settings and All agents; the live view cycled through four subtitles with five workers during observation. Refreshed the existing playground and closed temporary browser/server resources.
 
 Borderless usage spacing, 6 September 2026:
@@ -436,17 +366,17 @@ Realtime module designer, 6 September 2026:
 
 Flexible designer sizes, 6 September 2026:
 
-- Replaced fixed font choices with 1px steps: Sans 12-48px and Pixel Circle 24-160px. Percentage sizing retains Automatic mode. Added Face size at 50-150% for original and Grok animations, preserving animation timing and separate labels.
+- Replaced fixed font choices with 1px steps: Sans 12-48px and Pixel Circle 24-160px. Percentage sizing retains Automatic mode. Added Face size at 50-150% for original animations, preserving animation timing and separate labels.
 - Firmware embeds Geist fonts with stable handles per text role and bounded glyph caches. Expanded shimmer masks, exposed font allocation errors, and retained legacy Face arrays with scale 100. Default 100% animation pixels remain unchanged.
 - All 169 tests and web/firmware builds passed. Native fixtures rasterized 533 font combinations and checked 2,664 shimmer mask cases. Scaling fixtures verified browser/native parity at 50, 75, 100, 125 and 150 percent. Independent review completed.
-- Flashed the 15,449,568-byte application with verified hashes. Twenty USB cases passed across all four modules, including odd font sizes, minimum/maximum sizes, original/Grok scaling and font-error diagnostics. Corrected an invalid alignment value in the temporary checker; no firmware fix was needed.
+- Flashed the 15,449,568-byte application with verified hashes. Twenty USB cases passed across all four modules, including odd font sizes, minimum/maximum sizes, original face scaling and font-error diagnostics. Corrected an invalid alignment value in the temporary checker; no firmware fix was needed.
 - Verified a live settings change to 31px/19px Face text and 120% scale reached the device, then restored those temporary fields. Preserved the user's newer usage-layout edits made during validation. The bridge is connected with no font errors; temporary browser/fixture resources were closed.
 
 Session-name Greek glyphs, 6 September 2026:
 
 - Read Mean inspection 26-09-06-03.32.05 and its frame/crop. The pi in the session name was absent from the generated standard-size Sans fonts.
 - Added the Greek range to font generation and regenerated 16, 22 and 28px fonts. Native regression checks confirm a real pi glyph at every Sans size from 12 through 48; visually inspected 16px and 19px session fixtures.
-- All 169 tests, 533 native font cases and the firmware build passed. Independent review found no issues. Flashed the 15,451,696-byte application with verified hashes; four USB cases rendered pi session names at 16, 19, 22 and 28px without font errors, including Grok subtitle shimmer.
+- All 169 tests, 533 native font cases and the firmware build passed. Independent review found no issues. Flashed the 15,451,696-byte application with verified hashes; four USB cases rendered pi session names at 16, 19, 22 and 28px without font errors.
 
 Promoted saved configuration, 6 September 2026:
 
@@ -592,7 +522,7 @@ Firmware flashed and both themes verified over USB in Face, Usage, HEY, Clock an
 - Limited transfers to two 4,092-byte DMA descriptors (8,184 bytes), preserving queue depth and final-transfer callbacks. Moved 15,040 bytes of long-lived attention/render snapshots into PSRAM BSS. Configuration is tracked and reproducible.
 - Dashboard now exposes panel-transfer errors from acknowledgements and clears them after healthy acknowledgements without clearing unrelated errors.
 - Full check passed 241 tests and production build; the final DMA rounding regression and native build also passed. Independent review checked descriptor rounding, callback semantics, PSRAM map placement and ACK byte limits.
-- Flashed and verified firmware. A physical 300-update stress test used current user design settings, six animation clips, repeated detail transitions and rotations of 85, 22 and 137 degrees. All 300 frames were acknowledged over 99.2 seconds; 602 panel transfers completed with zero panel/font errors. Minimum largest DMA block was 63,488 bytes; minimum internal free memory was 110,999 bytes.
+- Flashed and verified firmware. A physical 300-update stress test used current user design settings, repeated detail transitions and rotations of 85, 22 and 137 degrees. All 300 frames were acknowledged over 99.2 seconds; 602 panel transfers completed with zero panel/font errors. Minimum largest DMA block was 63,488 bytes; minimum internal free memory was 110,999 bytes.
 
 ## macOS menu bar launcher
 

@@ -1,4 +1,5 @@
 #include "display_module.h"
+#include "speed_dial_layout.h"
 #include <math.h>
 #include <string.h>
 
@@ -54,6 +55,78 @@ static bool message_text(const cJSON *object, const char *key, char *out, size_t
             (codepoint >= 0xd800 && codepoint <= 0xdfff) || codepoint > 0x10ffff) return false;
     }
     memcpy(out, item->valuestring, length + 1);
+    return true;
+}
+
+static bool hex_id(const char *value)
+{
+    if (strlen(value) != 40) return false;
+    for (unsigned i = 0; i < 40; ++i)
+        if (!((value[i] >= '0' && value[i] <= '9') || (value[i] >= 'a' && value[i] <= 'f'))) return false;
+    return true;
+}
+
+static bool speed_dial_fields(const cJSON *dashboard, module_snapshot_t *out)
+{
+    speed_dial_snapshot_t *dial = &out->speed_dial;
+    const cJSON *layout = cJSON_GetObjectItemCaseSensitive(dashboard, "layout");
+    const cJSON *labels = cJSON_GetObjectItemCaseSensitive(dashboard, "showLabels");
+    uint32_t grid_size, list_rows;
+    if (out->status != MODULE_READY || !cJSON_IsString(layout) || !layout->valuestring ||
+        !cJSON_IsBool(labels) || !hex_id(out->open_token) ||
+        !message_text(dashboard, "artId", out->art_id, sizeof(out->art_id)) || !hex_id(out->art_id) ||
+        !integer(cJSON_GetObjectItemCaseSensitive(dashboard, "gridSize"), 6, &grid_size) ||
+        !integer(cJSON_GetObjectItemCaseSensitive(dashboard, "listRows"), 4, &list_rows) ||
+        (grid_size != 0 && grid_size != 4 && grid_size != 6) || (list_rows != 3 && list_rows != 4) ||
+        !cJSON_GetObjectItemCaseSensitive(dashboard, "pageIndex") ||
+        !cJSON_GetObjectItemCaseSensitive(dashboard, "pageCount")) return false;
+    if (!strcmp(layout->valuestring, "list")) dial->list = true;
+    else if (strcmp(layout->valuestring, "grid")) return false;
+    dial->grid_size = grid_size;
+    dial->list_rows = list_rows;
+    dial->show_labels = cJSON_IsTrue(labels);
+    const cJSON *shape = cJSON_GetObjectItemCaseSensitive(dashboard, "screenShape");
+    if (shape) {
+        if (!cJSON_IsString(shape) || !shape->valuestring) return false;
+        if (!strcmp(shape->valuestring, "rectangular")) dial->rectangular = true;
+        else if (strcmp(shape->valuestring, "round")) return false;
+    }
+    const cJSON *buttons = cJSON_GetObjectItemCaseSensitive(dashboard, "buttons");
+    unsigned limit = speed_dial_layout(out, NULL);
+    if (!cJSON_IsArray(buttons) || cJSON_GetArraySize(buttons) > (int)limit) return false;
+    const cJSON *item;
+    cJSON_ArrayForEach(item, buttons) {
+        speed_dial_button_t *button = &dial->buttons[dial->count];
+        const cJSON *enabled = cJSON_GetObjectItemCaseSensitive(item, "enabled");
+        const cJSON *color = cJSON_GetObjectItemCaseSensitive(item, "color");
+        const cJSON *status = cJSON_GetObjectItemCaseSensitive(item, "status");
+        uint32_t icon;
+        if (!cJSON_IsObject(item) || !message_text(item, "id", button->id, sizeof(button->id)) ||
+            !button->id[0] || !message_text(item, "label", button->label, sizeof(button->label)) ||
+            !cJSON_IsBool(enabled) || !color || !cJSON_IsString(status) || !status->valuestring ||
+            !integer(cJSON_GetObjectItemCaseSensitive(item, "iconIndex"), SPEED_DIAL_BUTTON_LIMIT - 1, &icon)) return false;
+        unsigned label_points = 0;
+        for (const unsigned char *c = (const unsigned char *)button->label; *c; ++c)
+            if ((*c & 0xc0) != 0x80) label_points++;
+        if (label_points > 24) return false;
+        for (const char *c = button->id; *c; ++c)
+            if (!((*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') ||
+                  (*c >= '0' && *c <= '9') || *c == '_' || *c == '-')) return false;
+        for (unsigned i = 0; i < dial->count; ++i)
+            if (!strcmp(button->id, dial->buttons[i].id)) return false;
+        button->enabled = cJSON_IsTrue(enabled);
+        button->icon_index = icon;
+        if (!cJSON_IsNull(color)) {
+            if (!integer(color, 0xffffff, &button->color)) return false;
+            button->has_color = true;
+        }
+        if (!strcmp(status->valuestring, "idle")) button->status = SPEED_DIAL_IDLE;
+        else if (!strcmp(status->valuestring, "running")) button->status = SPEED_DIAL_RUNNING;
+        else if (!strcmp(status->valuestring, "success")) button->status = SPEED_DIAL_SUCCESS;
+        else if (!strcmp(status->valuestring, "error")) button->status = SPEED_DIAL_ERROR;
+        else return false;
+        dial->count++;
+    }
     return true;
 }
 
@@ -118,6 +191,7 @@ const char *display_module_name(display_module_t kind)
         case DISPLAY_CLOCK: return "clock";
         case DISPLAY_ROON: return "roon";
         case DISPLAY_AUDIO: return "audio";
+        case DISPLAY_SPEED_DIAL: return "speedDial";
         default: return "face";
     }
 }
@@ -182,6 +256,7 @@ bool display_module_parse(const cJSON *root, module_snapshot_t *out)
         else if (strcmp(kind->valuestring, "clock") == 0) out->kind = DISPLAY_CLOCK;
         else if (strcmp(kind->valuestring, "roon") == 0) out->kind = DISPLAY_ROON;
         else if (strcmp(kind->valuestring, "audio") == 0) out->kind = DISPLAY_AUDIO;
+        else if (strcmp(kind->valuestring, "speedDial") == 0) out->kind = DISPLAY_SPEED_DIAL;
         else return false;
     }
     if (!parse_design(root, out)) return false;
@@ -236,6 +311,7 @@ bool display_module_parse(const cJSON *root, module_snapshot_t *out)
         !text(dashboard, "detail", out->detail, sizeof(out->detail)) ||
         !metric(cJSON_GetObjectItemCaseSensitive(dashboard, "primary"), &out->primary) ||
         !metric(cJSON_GetObjectItemCaseSensitive(dashboard, "secondary"), &out->secondary)) return false;
+    if (out->kind == DISPLAY_SPEED_DIAL && !speed_dial_fields(dashboard, out)) return false;
     if (out->kind == DISPLAY_CLOCK && !clock_fields(dashboard, out)) return false;
     if (out->kind == DISPLAY_AUDIO) {
         const cJSON *scope = cJSON_GetObjectItemCaseSensitive(dashboard, "scope");

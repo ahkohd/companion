@@ -49,7 +49,7 @@ with serial.Serial(args.port, 115200, timeout=0.15, write_timeout=2) as device:
     print(f'PASS: actual rendered eye shapes match all seven expressions; raster time {min(render_times)} to {max(render_times)} us', flush=True)
     assert max(render_times) < 33000, render_times
 
-    for seq, (state, age, expected) in enumerate([('working', 5000, 0), ('done', 1100, None), ('done', 5000, 0)], 900010):
+    for seq, (state, age) in enumerate([('working', 5000), ('done', 1100), ('done', 5000)], 900010):
         payload.update(seq=seq, state=state, animationMs=20000, ageMs=age)
         device.write((json.dumps(payload) + '\n').encode())
         receive_until(lambda m: m.get('type') == 'ack' and m.get('seq') == seq, 3)
@@ -57,10 +57,9 @@ with serial.Serial(args.port, 115200, timeout=0.15, write_timeout=2) as device:
         device.write((json.dumps(payload) + '\n').encode())
         drawn = receive_until(lambda m: m.get('type') == 'ack' and m.get('seq') == seq, 3)
         assert drawn.get('rendered_seq') == seq, drawn
-        count = drawn.get('decor_count', -1)
-        assert count > 0 if expected is None else count == expected, (state, age, drawn)
+        assert 'decor_count' not in drawn and 'clip' not in drawn, drawn
         assert drawn['render_us'] < 33000, drawn
-        print(f'PASS: {state} at {age} ms, {count} decorations, {drawn["render_us"]} us', flush=True)
+        print(f'PASS: {state} at {age} ms, native eyes only, {drawn["render_us"]} us', flush=True)
     payload.pop('animationMs')
     payload.pop('ageMs')
 
@@ -71,7 +70,7 @@ with serial.Serial(args.port, 115200, timeout=0.15, write_timeout=2) as device:
         time.sleep(0.1)
         device.write((json.dumps(payload) + '\n').encode())
         drawn = receive_until(lambda m: m.get('type') == 'ack' and m.get('seq') == seq, 3)
-        assert drawn.get('rendered_seq') == seq and drawn.get('decor_count') == 0, drawn
+        assert drawn.get('rendered_seq') == seq, drawn
         assert 100 < drawn.get('shimmer_pixels', 0) < 16384, drawn
         assert drawn['render_us'] < 33000, drawn
     print('PASS: live working text shimmer renders without duplicate dots', flush=True)
@@ -90,7 +89,7 @@ with serial.Serial(args.port, 115200, timeout=0.15, write_timeout=2) as device:
         drawn = receive_until(lambda m: m.get('type') == 'ack' and m.get('seq') == seq, 3)
         assert drawn.get('rendered_seq') == seq, drawn
         if state == 'working':
-            assert drawn.get('decor_count') == 0 and 100 < drawn.get('shimmer_pixels', 0) < 16384, drawn
+            assert 100 < drawn.get('shimmer_pixels', 0) < 16384, drawn
         else:
             assert drawn.get('shimmer_pixels') == 0, drawn
     print('PASS: shimmer masks update for counts and preview, then clear for Ready and Idle', flush=True)
@@ -111,7 +110,7 @@ with serial.Serial(args.port, 115200, timeout=0.15, write_timeout=2) as device:
             assert drawn.get('rendered_seq') == seq, drawn
             assert drawn.get('text_gap') == gap and drawn.get('status_top') == tops[gap], (gap, drawn)
             if state == 'working':
-                assert drawn.get('decor_count') == 0 and 100 < drawn.get('shimmer_pixels', 0) < 16384, (gap, drawn)
+                assert 100 < drawn.get('shimmer_pixels', 0) < 16384, (gap, drawn)
             else:
                 assert drawn.get('shimmer_pixels') == 0, (gap, drawn)  # no stale shimmer after moving the text
             assert drawn['render_us'] < 33000, drawn

@@ -2,12 +2,10 @@ import { resolveDeviceAppearance } from '../shared/device-appearance.mjs';
 import DESIGN_SCHEMA from '../shared/design-schema.json' with { type: 'json' };
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
-import GROK_CATALOG from '../shared/grok-catalog.json' with { type: 'json' };
 import DISPLAY_LAYOUT from '../shared/display-layout.json' with { type: 'json' };
 import STATUS_LABELS from '../shared/status-labels.json' with { type: 'json' };
 import { defaultSettings } from './studio-settings.mjs';
 import { dashboardFor, usagePageCount, heyPageCount } from './dashboard.mjs';
-const GROK_BY_ID = new Map(GROK_CATALOG.map(item => [item.id, item]));
 
 export const STATES = ['working', 'blocked', 'done', 'idle', 'unknown'];
 export const PRIORITY = ['blocked', 'working', 'done', 'unknown', 'idle'];
@@ -82,7 +80,7 @@ export class FaceStore extends EventEmitter {
     if (id !== 'all' && !this.agents.some(a => a.id === id)) throw new Error('Agent is no longer available');
   }
   validateExpression(expression) {
-    if (expression !== null && !EXPRESSION_LABELS.has(expression) && !GROK_BY_ID.has(expression)) throw new Error('Unknown expression');
+    if (expression !== null && !EXPRESSION_LABELS.has(expression)) throw new Error('Unknown expression');
   }
   setExpression(expression) {
     this.validateExpression(expression);
@@ -105,8 +103,6 @@ export class FaceStore extends EventEmitter {
   }
   faceDisplay() {
     const summary = aggregate(this.agents, this.connected);
-    const clip = GROK_BY_ID.get(this.expression);
-    if (clip) return { ...summary, state: 'idle', animation: clip.id, label: clip.label, name: 'Playground' };
     if (this.expression !== null) return {
       ...summary, state: this.expression, label: EXPRESSION_LABELS.get(this.expression), name: 'Playground'
     };
@@ -200,7 +196,7 @@ export class FaceStore extends EventEmitter {
   }
   display() {
     const attention = this.attention?.snapshot().active;
-    if (attention) return { state: attention.animation.startsWith('grok:') ? 'idle' : attention.animation, animation: attention.animation.startsWith('grok:') ? attention.animation : null, label: attention.title, name: attention.description, statusDots: false, nameShimmer: false };
+    if (attention) return { state: attention.animation, label: attention.title, name: attention.description, statusDots: false, nameShimmer: false };
     if (this.activeModule !== 'face') {
       const display = dashboardFor(this.activeModule, this.sources, this.settings, Date.now(), this.usagePage, this.heyPage);
       if (this.activeModule === 'roon') display.dashboard.expanded = this.roonExpanded;
@@ -208,7 +204,6 @@ export class FaceStore extends EventEmitter {
     }
     const display = this.faceDisplay();
     const mapping = this.expression === null ? this.settings.mappings[display.state] : null;
-    if (mapping?.startsWith('grok:')) return { ...display, animation: mapping };
     if (mapping) return { ...display, expression: mapping };
     return display;
   }
@@ -225,7 +220,7 @@ export class FaceStore extends EventEmitter {
     this.syncWorkingSession();
     const display = this.display();
     if (this.activeModule === 'clock' && !this.attention?.active) this.lastClockKey = JSON.stringify([display.dashboard.time, display.dashboard.weekday]);
-    const displayKey = JSON.stringify([this.selected, this.expression, this.activeModule, display.state, display.animation, display.expression, this.attention?.active?.id, this.attention?.active?.stepIndex]);
+    const displayKey = JSON.stringify([this.selected, this.expression, this.activeModule, display.state, display.expression, this.attention?.active?.id, this.attention?.active?.stepIndex]);
     if (displayKey !== this.lastDisplayKey) { this.changedAt = Date.now(); this.animationEpoch = (this.animationEpoch + 1) >>> 0; this.lastDisplayKey = displayKey; }
     this.seq++; this.emit('change', this.snapshot());
   }
@@ -243,10 +238,12 @@ export class FaceStore extends EventEmitter {
     if (dashboard.time !== undefined) bounded.time = wireText(dashboard.time, 7);
     if (dashboard.weekday !== undefined) bounded.weekday = wireText(dashboard.weekday, 3);
     for (const key of ['primary', 'secondary']) if (dashboard[key]) bounded[key] = { ...dashboard[key], provider: wireText(dashboard[key].provider, 16), label: wireText(dashboard[key].label, 16), reset: wireText(dashboard[key].reset, 24) };
+    if (dashboard.buttons) bounded.buttons = dashboard.buttons.map(({iconId, ...button}) => ({...button,
+      label: dashboard.layout === 'grid' && dashboard.showLabels === false ? '' : button.label}));
     return bounded;
   }
   frame() {
-    const { state, animation = null, expression, dashboard, statusDots = false, nameShimmer = false, label, name, counts = this.faceDisplay().counts } = this.display();
+    const { state, expression, dashboard, statusDots = false, nameShimmer = false, label, name, counts = this.faceDisplay().counts } = this.display();
     const look = this.pointer.enabled && this.pointer.status === 'active' ? { x: this.pointer.x, y: this.pointer.y } : null;
     const moduleIds = this.enabledModules();
     const attention = this.attention?.snapshot().active;
@@ -256,6 +253,6 @@ export class FaceStore extends EventEmitter {
     const appearance = resolveDeviceAppearance(this.settings, this.systemAppearance);
     const design = fields.map(field => appearance.design[visibleModule]?.[field.key] ?? field.default);
     const designFrame = fields.some((field, index) => design[index] !== field.default) ? { design } : {};
-    return { type: 'state', v: 1, theme: appearance.resolved, palette: appearance.palette, rotation: this.settings.device.rotation, ...moduleFrame, ...designFrame, ...(attention ? { attention: { id: attention.id, revision: attention.revision, detail: attention.detail, body: attention.body || attention.description || 'No additional details.', actions: attention.actions.map(({ id, label }) => ({ id, label })) } } : {}), moduleIndex: moduleIds.indexOf(this.activeModule), moduleCount: moduleIds.length, showModuleNavigation: !attention && this.settings.device.showModuleNavigation, showCardBackgrounds: this.settings.device.showCardBackgrounds, expression, epoch: this.animationEpoch, animationMs: Math.round(performance.now()), ageMs: Math.min(4294967295, Math.max(0, Date.now() - this.changedAt)), seq: this.seq, state, animation, statusDots, nameShimmer, preview: this.expression !== null, look, label: attention ? label : wireText(label), name: attention ? name : wireText(name), counts, textGap: this.textGap };
+    return { type: 'state', v: 1, theme: appearance.resolved, palette: appearance.palette, rotation: this.settings.device.rotation, ...moduleFrame, ...designFrame, ...(attention ? { attention: { id: attention.id, revision: attention.revision, detail: attention.detail, body: attention.body || attention.description || 'No additional details.', actions: attention.actions.map(({ id, label }) => ({ id, label })) } } : {}), moduleIndex: moduleIds.indexOf(this.activeModule), moduleCount: moduleIds.length, showModuleNavigation: !attention && this.settings.device.showModuleNavigation, showCardBackgrounds: this.settings.device.showCardBackgrounds, expression, epoch: this.animationEpoch, animationMs: Math.round(performance.now()), ageMs: Math.min(4294967295, Math.max(0, Date.now() - this.changedAt)), seq: this.seq, state, animation: null, statusDots, nameShimmer, preview: this.expression !== null, look, label: attention ? label : wireText(label), name: attention ? name : wireText(name), counts, textGap: this.textGap };
   }
 }

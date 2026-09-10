@@ -61,12 +61,12 @@ test('ready and idle fallback, selected sessions, previews and disconnection nev
   assert.equal(store.frame().name, ''); assert.equal(store.frame().nameShimmer, false);
 });
 
-test('one worker and inactive Face do not publish rotation frames; mapped Grok retains the session subtitle', t => {
+test('one worker and inactive Face do not publish rotation frames; mapped expressions retain the session subtitle', t => {
   const { store, advance } = setup(t);
   store.ingest([agent('a')]);
   let seq = store.seq; advance(12000); store.tickWorkingSessions(); assert.equal(store.seq, seq);
-  store.setSettings(mergeSettings(store.settings, { mappings: { working: 'grok:happy' } }));
-  assert.equal(store.display().animation, 'grok:happy'); assert.equal(store.frame().nameShimmer, true);
+  store.setSettings(mergeSettings(store.settings, { mappings: { working: 'done' } }));
+  assert.equal(store.display().expression, 'done'); assert.equal(store.frame().nameShimmer, true);
   store.setSettings(mergeSettings(store.settings, { modules: { clock: { enabled: true } }, device: { activeModule: 'clock' } }));
   store.ingest([agent('a'), agent('b')]);
   seq = store.seq; advance(12000); store.tickWorkingSessions();

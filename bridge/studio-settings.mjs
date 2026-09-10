@@ -1,16 +1,16 @@
+import { validateSpeedDial } from './speed-dial.mjs';
 import { COLOR_TOKENS } from '../shared/device-appearance.mjs';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import DEFAULTS from '../shared/studio-defaults.json' with { type: 'json' };
 import DESIGN_SCHEMA from '../shared/design-schema.json' with { type: 'json' };
-import CATALOG from '../shared/grok-catalog.json' with { type: 'json' };
 import { MAX_USAGE_PROVIDERS, validProviderId } from './module-sources.mjs';
 
-export const MODULE_IDS = ['face', 'usage', 'hey', 'clock', 'roon', 'audio'];
+export const MODULE_IDS = ['face', 'usage', 'hey', 'clock', 'roon', 'audio', 'speedDial'];
 export const MAPPING_STATES = ['working', 'blocked', 'done', 'idle', 'unknown', 'disconnected'];
 export const NATIVE_EXPRESSIONS = ['working', 'blocked', 'done', 'idle', 'sleep', 'unknown', 'disconnected'];
-const animationIds = new Set([...NATIVE_EXPRESSIONS, ...CATALOG.map(item => item.id)]);
+const animationIds = new Set(NATIVE_EXPRESSIONS);
 const enumValue = (value, values, name) => { if (!values.includes(value)) throw new Error(`Choose a valid ${name}.`); };
 const boolean = (value, name) => { if (typeof value !== 'boolean') throw new Error(`${name} must be on or off.`); };
 const object = value => value && typeof value === 'object' && !Array.isArray(value);
@@ -62,6 +62,7 @@ export function validateSettings(settings) {
   enumValue(settings.modules.clock.hourFormat, ['12', '24'], 'clock format');
   boolean(settings.modules.clock.showWeekday, 'Show weekday');
   boolean(settings.modules.clock.blinkSeparator, 'Blink separator');
+  validateSpeedDial(settings.modules.speedDial);
   const roon = settings.modules.roon;
   for (const id of ['roon', 'spotify', 'appleMusic', 'system']) boolean(roon.players?.[id], `${id} player`);
   if (roon.enabled && !Object.values(roon.players).some(Boolean)) throw new Error('Enable at least one Now Playing source.');
@@ -82,8 +83,13 @@ export function validateSettings(settings) {
 }
 
 function migrateSavedSettings(saved) {
+  if (saved?.version === 1 && object(saved.mappings)) {
+    for (const state of MAPPING_STATES) {
+      if (typeof saved.mappings[state] === 'string' && saved.mappings[state].startsWith('grok:')) saved.mappings[state] = null;
+    }
+  }
   const order = saved?.device?.moduleOrder;
-  if (saved?.version === 1 && Array.isArray(order) && [3, 4, 5].includes(order.length) &&
+  if (saved?.version === 1 && Array.isArray(order) && [3, 4, 5, 6].includes(order.length) &&
       new Set(order).size === order.length && order.every(id => MODULE_IDS.includes(id)) &&
       ['face', 'usage', 'hey'].every(id => order.includes(id))) {
     saved.device.moduleOrder = [...order, ...MODULE_IDS.filter(id => !order.includes(id))];

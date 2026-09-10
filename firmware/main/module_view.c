@@ -26,6 +26,13 @@
 #define CHECKING_WIDTH 120
 #define CHECKING_HEIGHT 20
 
+static lv_obj_t *speed_dial_view, *speed_dial_footer;
+static lv_obj_t *speed_dial_panels[SPEED_DIAL_BUTTON_LIMIT], *speed_dial_images[SPEED_DIAL_BUTTON_LIMIT], *speed_dial_labels[SPEED_DIAL_BUTTON_LIMIT], *speed_dial_badges[SPEED_DIAL_BUTTON_LIMIT];
+static lv_image_dsc_t speed_dial_sources[SPEED_DIAL_BUTTON_LIMIT];
+static module_snapshot_t speed_dial_shown;
+static speed_dial_target_t speed_dial_pressed;
+static bool speed_dial_active;
+static int speed_dial_pressed_index = -1, speed_dial_pressed_x, speed_dial_pressed_y;
 static lv_obj_t *audio_picker, *audio_picker_footer, *audio_rows[3], *audio_names[3], *audio_checks[3];
 static lv_obj_t *audio_view, *audio_title, *audio_value, *audio_device, *audio_controls[3];
 static bool audio_enabled[3], audio_muted, audio_input;
@@ -252,6 +259,71 @@ static void music_badge_icon(lv_event_t *event)
     lv_draw_image(lv_event_get_layer(event), &image, &area);
 }
 
+static void speed_dial_badge(lv_event_t *event)
+{
+    unsigned index = (unsigned)(uintptr_t)lv_event_get_user_data(event);
+    speed_dial_status_t status = speed_dial_shown.speed_dial.buttons[index].status;
+    lv_area_t bounds; lv_obj_get_coords(lv_event_get_target_obj(event), &bounds);
+    lv_layer_t *layer = lv_event_get_layer(event);
+    int cx = (bounds.x1 + bounds.x2 + 1) / 2, cy = (bounds.y1 + bounds.y2 + 1) / 2;
+    if (status == SPEED_DIAL_RUNNING) {
+        lv_draw_arc_dsc_t arc; lv_draw_arc_dsc_init(&arc);
+        arc.center = (lv_point_t){cx, cy}; arc.radius = 6; arc.width = 2;
+        arc.color = lv_color_hex(current_palette.foreground); arc.rounded = true;
+        arc.start_angle = (int)fmod(module_animation_time * 240, 360);
+        arc.end_angle = arc.start_angle + 250;
+        lv_draw_arc(layer, &arc);
+    } else {
+        lv_draw_line_dsc_t line; lv_draw_line_dsc_init(&line);
+        line.width = 2; line.round_start = line.round_end = true;
+        line.color = lv_color_hex(status == SPEED_DIAL_SUCCESS ? current_palette.success : current_palette.danger);
+        line.p1 = (lv_point_precise_t){cx - 5, cy + (status == SPEED_DIAL_SUCCESS ? 0 : -5)};
+        line.p2 = (lv_point_precise_t){cx + (status == SPEED_DIAL_SUCCESS ? -1 : 5), cy + 5};
+        lv_draw_line(layer, &line);
+        line.p1 = line.p2;
+        if (status == SPEED_DIAL_ERROR) line.p1 = (lv_point_precise_t){cx - 5, cy + 5};
+        line.p2 = (lv_point_precise_t){cx + 5, cy - 5};
+        lv_draw_line(layer, &line);
+    }
+}
+
+void module_view_speed_dial_cancel(void)
+{
+    if (speed_dial_pressed_index >= 0) {
+        lv_obj_set_style_border_width(speed_dial_panels[speed_dial_pressed_index], 0, 0);
+        lv_obj_set_style_translate_y(speed_dial_panels[speed_dial_pressed_index], 0, 0);
+    }
+    speed_dial_pressed_index = -1;
+    speed_dial_pressed.token[0] = '\0';
+}
+
+static bool speed_dial_atlas_ready(void)
+{
+    return speed_dial_active && roon_pixels && speed_dial_shown.art_id[0] &&
+        !strcmp(speed_dial_shown.art_id, roon_art_id);
+}
+
+bool module_view_speed_dial_press(int x, int y, speed_dial_target_t *target)
+{
+    module_view_speed_dial_cancel();
+    if (!speed_dial_atlas_ready() || !speed_dial_target_at(&speed_dial_shown, x, y, target)) return false;
+    speed_dial_pressed = *target;
+    speed_dial_pressed_index = target->index;
+    speed_dial_pressed_x = x; speed_dial_pressed_y = y;
+    lv_obj_t *panel = speed_dial_panels[target->index];
+    lv_obj_set_style_border_color(panel, lv_color_hex(current_palette.foreground), 0);
+    lv_obj_set_style_border_opa(panel, LV_OPA_50, 0);
+    lv_obj_set_style_border_width(panel, 2, 0);
+    lv_obj_set_style_translate_y(panel, 2, 0);
+    return true;
+}
+
+bool module_view_speed_dial_press_valid(int x, int y, const speed_dial_target_t *target)
+{
+    return speed_dial_atlas_ready() && speed_dial_pressed_index >= 0 &&
+        !memcmp(target, &speed_dial_pressed, sizeof(*target)) && speed_dial_target_valid(&speed_dial_shown, x, y, target);
+}
+
 void module_view_set_artwork(const char *id, const uint8_t *pixels)
 {
     if (!roon_pixels) return;
@@ -259,8 +331,13 @@ void module_view_set_artwork(const char *id, const uint8_t *pixels)
         memcpy(roon_pixels, pixels, ROON_ART_BYTES);
         memcpy(roon_art_id, id, sizeof(roon_art_id));
     } else roon_art_id[0] = '\0';
+    if (!speed_dial_atlas_ready()) module_view_speed_dial_cancel();
     lv_image_cache_drop(&roon_image_source);
     lv_obj_invalidate(roon_image);
+    for (unsigned i = 0; i < SPEED_DIAL_BUTTON_LIMIT; ++i) {
+        lv_image_cache_drop(&speed_dial_sources[i]);
+        lv_obj_invalidate(speed_dial_images[i]);
+    }
 }
 
 void module_view_create(lv_obj_t *screen)
@@ -338,6 +415,19 @@ void module_view_create(lv_obj_t *screen)
         roon_controls[i] = rounded(roon_chrome, 0, 365, 44, 44, LV_RADIUS_CIRCLE, 0x000000);
         lv_obj_set_style_bg_opa(roon_controls[i], LV_OPA_TRANSP, 0);
         lv_obj_add_event_cb(roon_controls[i], control_icon, LV_EVENT_DRAW_MAIN, (void *)(uintptr_t)i);
+    }
+
+    speed_dial_view = group(body);
+    speed_dial_footer = label(speed_dial_view, 0, 416, 466, &lv_font_geist_mono_16, COLOR_MUTED, LV_TEXT_ALIGN_CENTER);
+    for (unsigned i = 0; i < SPEED_DIAL_BUTTON_LIMIT; ++i) {
+        speed_dial_panels[i] = rounded(speed_dial_view, 0, 0, 96, 96, LV_RADIUS_CIRCLE, 0x151515);
+        speed_dial_images[i] = lv_image_create(speed_dial_panels[i]);
+        passive(speed_dial_images[i]);
+        lv_image_set_pivot(speed_dial_images[i], 0, 0);
+        speed_dial_labels[i] = label(speed_dial_view, 0, 0, 112, &lv_font_geist_16, COLOR_TEXT, LV_TEXT_ALIGN_CENTER);
+        speed_dial_badges[i] = rounded(speed_dial_view, 0, 0, 14, 14, LV_RADIUS_CIRCLE, 0);
+        lv_obj_add_event_cb(speed_dial_badges[i], speed_dial_badge, LV_EVENT_DRAW_MAIN, (void *)(uintptr_t)i);
+        show(speed_dial_images[i], false); show(speed_dial_badges[i], false);
     }
 
     lv_obj_t *mask_canvas = lv_canvas_create(body);
@@ -545,6 +635,11 @@ void module_view_update(const module_snapshot_t *module, bool disconnected)
     }
     roon_render_active = visible && ready && module->kind == DISPLAY_ROON;
     if (!roon_render_active) roon_motion.initialized = false;
+    speed_dial_active = visible && ready && module->kind == DISPLAY_SPEED_DIAL;
+    if (speed_dial_pressed_index >= 0 && (!speed_dial_active ||
+        !speed_dial_target_valid(module, speed_dial_pressed_x, speed_dial_pressed_y, &speed_dial_pressed))) module_view_speed_dial_cancel();
+    if (speed_dial_active) speed_dial_shown = *module;
+    bool dial_empty = speed_dial_active && !module->speed_dial.count;
     bool mail_empty = ready && module->kind == DISPLAY_HEY && module->message_count == 0;
     clock_blink_active = visible && ready && module->kind == DISPLAY_CLOCK && module->blink_separator;
     checking_active = visible && ready && module->kind != DISPLAY_CLOCK && module->kind != DISPLAY_ROON && module->refreshing;
@@ -556,13 +651,14 @@ void module_view_update(const module_snapshot_t *module, bool disconnected)
     show(audio_view, visible && ready && module->kind == DISPLAY_AUDIO && !module->audio_picker_open);
     show(audio_picker, visible && ready && module->kind == DISPLAY_AUDIO && module->audio_picker_open);
     show(roon, visible && ready && module->kind == DISPLAY_ROON);
-    show(empty, visible && (!ready || mail_empty));
+    show(speed_dial_view, speed_dial_active && !dial_empty);
+    show(empty, visible && (!ready || mail_empty || dial_empty));
     lv_opa_t card_opacity = module->show_card_backgrounds ? LV_OPA_COVER : LV_OPA_TRANSP;
     for (unsigned i = 0; i < 2; ++i) lv_obj_set_style_bg_opa(usage_panels[i], card_opacity, 0);
     for (unsigned i = 0; i < MAIL_ROWS; ++i) lv_obj_set_style_bg_opa(mail_panels[i], card_opacity, 0);
     for (unsigned i = 0; i < MODULE_LIMIT; ++i) {
         show(dots[i], module->show_navigation && module->count > 1 && i < module->count);
-        lv_obj_set_pos(dots[i], 231 - ((int)module->count - 1) * 8 + (int)i * 16, 432);
+        lv_obj_set_pos(dots[i], 231 - ((int)module->count - 1) * 8 + (int)i * 16, module->kind == DISPLAY_SPEED_DIAL ? 446 : 432);
         lv_obj_set_style_bg_color(dots[i], lv_color_hex(i == module->index ? current_palette.accent : current_palette.track), 0);
     }
     if (!visible) return;
@@ -592,6 +688,52 @@ void module_view_update(const module_snapshot_t *module, bool disconnected)
             layout->width, layout->height, layout->radius, layout->cardColor);
         update_metric(0, &module->primary, module->title, "Session", module->show_card_backgrounds, layout);
         update_metric(1, &module->secondary, module->title, "Weekly", module->show_card_backgrounds, layout);
+    } else if (module->kind == DISPLAY_SPEED_DIAL) {
+        const speedDial_design_t *layout = &design.speedDial;
+        const lv_font_t *font = design_font(DESIGN_FONT_SPEED_DIAL_LABEL, layout->labelSize);
+        bool artwork = roon_pixels && module->art_id[0] && !strcmp(module->art_id, roon_art_id);
+        speed_dial_geometry_t slots[SPEED_DIAL_BUTTON_LIMIT];
+        unsigned slot_count = speed_dial_layout(module, slots);
+        for (unsigned i = 0; i < SPEED_DIAL_BUTTON_LIMIT; ++i) {
+            bool present = i < module->speed_dial.count && i < slot_count;
+            show(speed_dial_panels[i], present);
+            show(speed_dial_labels[i], present && (module->speed_dial.list || module->speed_dial.show_labels));
+            show(speed_dial_badges[i], present && module->speed_dial.buttons[i].status != SPEED_DIAL_IDLE);
+            if (!present) continue;
+            const speed_dial_button_t *button = &module->speed_dial.buttons[i];
+            speed_dial_geometry_t geometry = slots[i];
+            speed_dial_rect_t *panel = &geometry.button, *icon = &geometry.icon, *text = &geometry.label;
+            style_panel(speed_dial_panels[i], panel->x, panel->y, panel->width, panel->height, geometry.radius,
+                button->has_color ? button->color : current_palette.surface);
+            lv_obj_set_style_bg_opa(speed_dial_panels[i], module->speed_dial.list ? LV_OPA_TRANSP : LV_OPA_COVER, 0);
+            lv_obj_set_style_opa(speed_dial_panels[i], button->enabled ? LV_OPA_COVER : LV_OPA_40, 0);
+            lv_obj_set_pos(speed_dial_images[i], icon->x - panel->x, icon->y - panel->y);
+            if (roon_pixels) {
+                lv_image_cache_drop(&speed_dial_sources[i]);
+                speed_dial_sources[i] = (lv_image_dsc_t){ .header = { .magic = LV_IMAGE_HEADER_MAGIC,
+                    .cf = LV_COLOR_FORMAT_RGB565, .w = SPEED_DIAL_ATLAS_ICON_SIZE, .h = SPEED_DIAL_ATLAS_ICON_SIZE,
+                    .stride = ROON_ART_SIDE * 2 }, .data_size = ROON_ART_SIDE * SPEED_DIAL_ATLAS_ICON_SIZE * 2,
+                    .data = roon_pixels + speed_dial_icon_offset(button->icon_index) };
+                lv_image_set_src(speed_dial_images[i], &speed_dial_sources[i]);
+                lv_image_set_scale(speed_dial_images[i], icon->width * 256 / SPEED_DIAL_ATLAS_ICON_SIZE);
+            }
+            show(speed_dial_images[i], artwork);
+            style_label(speed_dial_labels[i], text->x, text->y + design_font_inset(font, layout->labelSize), text->width,
+                font, 1, button->enabled ? layout->textColor : layout->mutedColor,
+                module->speed_dial.list ? LV_TEXT_ALIGN_LEFT : LV_TEXT_ALIGN_CENTER);
+            lv_label_set_text(speed_dial_labels[i], button->label);
+            speed_dial_rect_t *badge = &geometry.status;
+            style_panel(speed_dial_badges[i], badge->x, badge->y, badge->width, badge->height, LV_RADIUS_CIRCLE, current_palette.background);
+            lv_obj_invalidate(speed_dial_badges[i]);
+        }
+        show(speed_dial_footer, module->page_count > 1);
+        lv_obj_set_style_text_color(speed_dial_footer, lv_color_hex(layout->mutedColor), 0);
+        char page[20]; snprintf(page, sizeof(page), "%u / %u", module->page_index + 1, module->page_count);
+        lv_label_set_text(speed_dial_footer, page);
+        if (dial_empty) {
+            lv_label_set_text(empty_title, "Speed Dial");
+            lv_label_set_text(empty_detail, "Add buttons in Settings");
+        }
     } else if (module->kind == DISPLAY_AUDIO) {
         const audio_design_t *layout = &design.audio;
         if (module->audio_picker_open) {
@@ -696,6 +838,8 @@ void module_view_update(const module_snapshot_t *module, bool disconnected)
 void module_view_tick(double animation_time)
 {
     if (isfinite(animation_time)) module_animation_time = animation_time;
+    if (speed_dial_active) for (unsigned i = 0; i < speed_dial_shown.speed_dial.count; ++i)
+        if (speed_dial_shown.speed_dial.buttons[i].status == SPEED_DIAL_RUNNING) lv_obj_invalidate(speed_dial_badges[i]);
     if (roon_render_active) apply_roon_pose(roon_motion_sample(&roon_motion, animation_time));
     bool separator_visible = !clock_blink_active || !isfinite(animation_time) || animation_time < 0 || fmod(animation_time, 1) < .5;
     if (separator_visible != clock_separator_visible) {

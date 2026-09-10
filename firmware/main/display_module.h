@@ -14,13 +14,31 @@
 #define MODULE_MESSAGE_LIMIT 3
 #define MODULE_SENDER_CAPACITY 33
 #define MODULE_SUBJECT_CAPACITY 65
-#define MODULE_LIMIT 6
+#define MODULE_LIMIT 7
+#define SPEED_DIAL_BUTTON_LIMIT 13
+#define SPEED_DIAL_ID_CAPACITY 49
+#define SPEED_DIAL_LABEL_CAPACITY 65
 #define MODULE_CLOCK_TIME_CAPACITY 8
 #define MODULE_WEEKDAY_CAPACITY 4
 
-typedef enum { DISPLAY_FACE, DISPLAY_USAGE, DISPLAY_HEY, DISPLAY_CLOCK, DISPLAY_ROON, DISPLAY_AUDIO } display_module_t;
+typedef enum { DISPLAY_FACE, DISPLAY_USAGE, DISPLAY_HEY, DISPLAY_CLOCK, DISPLAY_ROON, DISPLAY_AUDIO, DISPLAY_SPEED_DIAL } display_module_t;
 typedef enum { MUSIC_ROON, MUSIC_SPOTIFY, MUSIC_SYSTEM, MUSIC_APPLE_MUSIC } music_player_t;
 typedef enum { MODULE_READY, MODULE_LOADING, MODULE_UNAVAILABLE, MODULE_AUTH, MODULE_ERROR } module_status_t;
+
+typedef enum { SPEED_DIAL_IDLE, SPEED_DIAL_RUNNING, SPEED_DIAL_SUCCESS, SPEED_DIAL_ERROR } speed_dial_status_t;
+typedef struct {
+    char id[SPEED_DIAL_ID_CAPACITY], label[SPEED_DIAL_LABEL_CAPACITY];
+    uint32_t color;
+    uint8_t icon_index;
+    speed_dial_status_t status;
+    bool has_color, enabled;
+} speed_dial_button_t;
+
+typedef struct {
+    bool list, show_labels, rectangular;
+    uint8_t grid_size, list_rows, count;
+    speed_dial_button_t buttons[SPEED_DIAL_BUTTON_LIMIT];
+} speed_dial_snapshot_t;
 
 typedef struct {
     char provider[MODULE_METRIC_LABEL_CAPACITY];
@@ -78,6 +96,7 @@ typedef struct {
     uint32_t audio_device_id, audio_next_device_id, audio_device_count;
     float audio_volume;
     char audio_device_name[65];
+    speed_dial_snapshot_t speed_dial;
     module_metric_t primary;
     module_metric_t secondary;
     bool has_count;
@@ -112,6 +131,8 @@ static inline void display_module_design(const module_snapshot_t *module, module
                 out->clock.textColor=p->foreground; out->clock.mutedColor=p->muted; break;
             case DISPLAY_AUDIO:
                 out->audio.textColor=p->foreground; out->audio.mutedColor=p->muted; break;
+            case DISPLAY_SPEED_DIAL:
+                out->speedDial.textColor=p->foreground; out->speedDial.mutedColor=p->muted; break;
             case DISPLAY_ROON:
                 out->roon.textColor=p->foreground; out->roon.mutedColor=p->muted; out->roon.accentColor=p->accent; break;
         }

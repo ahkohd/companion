@@ -4,11 +4,12 @@ import { resolveDesign } from '../../shared/device-appearance.mjs'
 import { devicePaletteDefaults } from '../lib/device-appearance'
 import { defaultDesign, designFor, colorHex, sansLine, pixelLine, percentageTop, type DesignValues, type Designs } from '../lib/design'
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactElement, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, ChartNoAxesCombined, Clock, Heart, Mail, Music2, Check, Minus, Plus, Volume2, VolumeX, Mic, MicOff, Radio, RotateCcw, ScanFace } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ChartNoAxesCombined, Clock, Heart, LayoutGrid, Mail, Music2, Check, Minus, Plus, Volume2, VolumeX, Mic, MicOff, Radio, RotateCcw, ScanFace } from 'lucide-react'
+import SpeedDialDashboard from './SpeedDialDashboard'
 import Face, { useReducedMotion } from './face/Face'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
-import { animationName, moduleNames, type ModuleId, type PlayerId, type OpenCardRequest, type AudioControlRequest, type AudioViewRequest, type StudioSnapshot } from '../lib/studio'
+import { animationName, moduleNames, type ModuleId, type PlayerId, type OpenCardRequest, type AudioControlRequest, type AudioViewRequest, type SpeedDialRunRequest, type StudioSnapshot } from '../lib/studio'
 import { paletteShimmerGradient } from '../shimmer'
 import './device-preview.css'
 import {PlayerIcon} from './PlayerIcon'
@@ -30,15 +31,17 @@ export interface DevicePreviewProps {
   onAudioPage?: (direction:number) => void
   onAudioControl?: (request:AudioControlRequest) => void
   onAudioView?: (request:AudioViewRequest) => void
+  onSpeedDialRun?: (request:SpeedDialRunRequest) => void
+  onSpeedDialPage?: (direction:number) => void
   pending?: boolean
   online?: boolean
 }
 
 type Dashboard = NonNullable<StudioSnapshot['display']['dashboard']>
 type Metric = Dashboard['primary']
-const moduleIds: ModuleId[] = ['face', 'usage', 'hey', 'clock', 'roon', 'audio']
-const shortNames = { face: 'Face', usage: 'Usage', hey: 'HEY', clock: 'Clock', roon: 'Music', audio:'Audio' }
-const moduleIcons = { face: ScanFace, usage: ChartNoAxesCombined, hey: Mail, clock: Clock, roon: Music2, audio:Volume2 }
+const moduleIds: ModuleId[] = ['face', 'usage', 'hey', 'clock', 'roon', 'audio', 'speedDial']
+const shortNames = { face: 'Face', usage: 'Usage', hey: 'HEY', clock: 'Clock', roon: 'Music', audio:'Audio', speedDial:'Dial' }
+const moduleIcons = { face: ScanFace, usage: ChartNoAxesCombined, hey: Mail, clock: Clock, roon: Music2, audio:Volume2, speedDial:LayoutGrid }
 const encoder = new TextEncoder()
 
 function wireText(value: string, bytes = 48) {
@@ -212,7 +215,7 @@ function AudioDashboard({dashboard,d,pending,onControl,onView,onSwipe}:{dashboar
   </>
 }
 
-function ModuleDashboard({ module, dashboard, online, animationMs, reduced, showCardBackgrounds, design, onAudioControl, onAudioView, onRoonControl, onRoonView, onOpenCard, onSwipe, pending }: { onAudioView?:(request:AudioViewRequest)=>void; onAudioControl?:(request:AudioControlRequest)=>void; onRoonView?:(expanded:boolean)=>void; onRoonControl?:(action:string,player?:PlayerId)=>void; onOpenCard?:(request:OpenCardRequest)=>void; onSwipe:(x:number,y:number)=>void; pending?:boolean; module: 'usage' | 'hey' | 'clock' | 'roon' | 'audio'; dashboard?: Dashboard; online: boolean; animationMs: number; reduced: boolean; showCardBackgrounds: boolean; design?:Partial<Designs> }) {
+function ModuleDashboard({ module, dashboard, screenShape, online, animationMs, reduced, showCardBackgrounds, design, onAudioControl, onAudioView, onRoonControl, onRoonView, onOpenCard, onSpeedDialRun, onSwipe, pending }: { screenShape:'round'|'rectangular';onSpeedDialRun?:(request:SpeedDialRunRequest)=>void; onAudioView?:(request:AudioViewRequest)=>void; onAudioControl?:(request:AudioControlRequest)=>void; onRoonView?:(expanded:boolean)=>void; onRoonControl?:(action:string,player?:PlayerId)=>void; onOpenCard?:(request:OpenCardRequest)=>void; onSwipe:(x:number,y:number)=>void; pending?:boolean; module: 'usage' | 'hey' | 'clock' | 'roon' | 'audio' | 'speedDial'; dashboard?: Dashboard; online: boolean; animationMs: number; reduced: boolean; showCardBackgrounds: boolean; design?:Partial<Designs> }) {
   const d=designFor(design,module)
   const title = wireText(dashboard?.title || moduleNames[module], 32)
   const ready = online && dashboard?.status === 'ready'
@@ -225,7 +228,8 @@ function ModuleDashboard({ module, dashboard, online, animationMs, reduced, show
     .filter(({ metric }) => metric && (metric.label || metric.reset || Number.isFinite(metric.remaining)))
   const mailItems = dashboard?.items?.slice(0, d.rows) ?? []
 
-  return <svg className="dp-module-screen" viewBox="0 0 466 466" role={module==='clock'?'img':'group'} aria-label={module === 'clock' && ready ? `Clock, ${dashboard?.time}, ${dashboard?.weekday || ''}` : `${title} ${module === 'usage' ? 'usage' : module === 'hey' ? 'mail' : module === 'roon' ? 'music' : module === 'audio' ? 'audio' : 'clock'} dashboard`}>
+  return <svg className="dp-module-screen" viewBox="0 0 466 466" role={module==='clock'?'img':'group'} aria-label={module === 'clock' && ready ? `Clock, ${dashboard?.time}, ${dashboard?.weekday || ''}` : `${title} ${module === 'usage' ? 'usage' : module === 'hey' ? 'mail' : module === 'roon' ? 'music' : module === 'audio' ? 'audio' : module === 'speedDial' ? 'Speed Dial' : 'clock'} dashboard`}>
+    {ready && module === 'speedDial' && <SpeedDialDashboard dashboard={dashboard!} screenShape={screenShape} d={d} pending={pending} onRun={onSpeedDialRun} onSwipe={onSwipe}/>}
     {ready && module === 'audio' && <AudioDashboard dashboard={dashboard!} d={d} pending={pending} onControl={onAudioControl} onView={onAudioView} onSwipe={onSwipe}/>}
     {ready && module === 'roon' && <RoonDashboard dashboard={dashboard!} d={d} reduced={reduced} pending={pending} onControl={onRoonControl} onView={onRoonView} onSwipe={onSwipe}/>}
     {ready && module === 'clock' && <>
@@ -266,7 +270,7 @@ function Hint({ text, children }: { text: string; children: ReactElement }) {
   return <Tooltip><TooltipTrigger render={children} /><TooltipContent side="bottom">{text}</TooltipContent></Tooltip>
 }
 
-export default function DevicePreview({ snapshot, localAnimation, localReplay = 0, onModule, onLive, onUsagePage, onHeyPage, onOpenCard, onRoonControl, onRoonView, onRoonPage, onAudioControl, onAudioPage, onAudioView, pending = false, online = false }: DevicePreviewProps) {
+export default function DevicePreview({ snapshot, localAnimation, localReplay = 0, onModule, onLive, onUsagePage, onHeyPage, onOpenCard, onRoonControl, onRoonView, onRoonPage, onAudioControl, onAudioPage, onAudioView, onSpeedDialRun, onSpeedDialPage, pending = false, online = false }: DevicePreviewProps) {
   const panel = previewDisplay(snapshot?.device.profile)
   const canvasSide = Math.min(panel.width, panel.height)
   const titleId = useId()
@@ -278,12 +282,11 @@ export default function DevicePreview({ snapshot, localAnimation, localReplay = 
     moduleIds.includes(id as ModuleId) && snapshot.settings.modules[id as ModuleId].enabled) ?? ['face']
   const moduleIndex = enabled.indexOf(module)
   const display = snapshot?.display
-  const semanticState = local ? (localAnimation?.startsWith('grok:') ? 'idle' : localAnimation || 'idle') : online ? display?.state || 'disconnected' : 'disconnected'
-  const animation = local ? localAnimation?.startsWith('grok:') ? localAnimation : null : online ? display?.animation : null
+  const semanticState = local ? localAnimation || 'idle' : online ? display?.state || 'disconnected' : 'disconnected'
   const pose = local ? semanticState : online ? display?.expression || semanticState : 'disconnected'
   const caption = attention ? attention.title : wireText(local ? animationName(localAnimation || 'idle') : online ? display?.label || 'Connecting' : 'Disconnected')
   const subtitle = attention ? attention.description : wireText(local ? 'Preview' : online ? display?.name || '' : 'Waiting for host')
-  const shimmer = semanticState === 'working' && !animation
+  const shimmer = semanticState === 'working'
   const nameShimmer = !local && online && display?.nameShimmer === true
   const forcedPose = Boolean(snapshot && (snapshot.expression !== null || snapshot.display.expression))
   const gap = snapshot?.layout.textGap ?? 8
@@ -292,14 +295,15 @@ export default function DevicePreview({ snapshot, localAnimation, localReplay = 
   const showNavigation = snapshot?.settings.device.showModuleNavigation === true
   const swipeEnabled = snapshot?.settings.device.swipeEnabled ?? true
   const canSwitch = !attention && !pending && online && enabled.length > 1
-  const canPage = !attention && !pending && online && (module === 'audio' ? !!onAudioPage && (display?.dashboard?.pageCount ?? 2)>1 : module === 'roon' ? !!onRoonPage && (display?.dashboard?.pageCount ?? 1)>1 : (module === 'usage' || module === 'hey') && display?.dashboard?.status === 'ready' && (display.dashboard.pageCount ?? 1)>1)
-  const changePage = (direction: number) => module === 'audio' ? onAudioPage?.(direction) : module === 'roon' ? onRoonPage?.(direction) : module === 'hey' ? onHeyPage(direction) : onUsagePage(direction)
+  const hasPages = !attention && online && (module === 'speedDial' ? !!onSpeedDialPage && (display?.dashboard?.pageCount ?? 1)>1 : module === 'audio' ? !!onAudioPage && (display?.dashboard?.pageCount ?? 2)>1 : module === 'roon' ? !!onRoonPage && (display?.dashboard?.pageCount ?? 1)>1 : (module === 'usage' || module === 'hey') && display?.dashboard?.status === 'ready' && (display.dashboard.pageCount ?? 1)>1)
+  const canPage = !pending && hasPages
+  const changePage = (direction: number) => module === 'speedDial' ? onSpeedDialPage?.(direction) : module === 'audio' ? onAudioPage?.(direction) : module === 'roon' ? onRoonPage?.(direction) : module === 'hey' ? onHeyPage(direction) : onUsagePage(direction)
   const showLive = !attention && (local || Boolean(snapshot && snapshot.expression !== null))
   const gesture = useRef<{ id: number; x: number; y: number; at: number } | null>(null)
   const palette=snapshot?.deviceAppearance?.palette || devicePaletteDefaults[snapshot?.settings.deviceAppearance?.mode==='light'?'light':'dark']
   const resolvedDesign=resolveDesign(snapshot?.settings.design || defaultDesign,palette)
   const faceDesign=designFor(resolvedDesign,'face')
-  const style = { '--device-background':colorHex(palette.background),'--device-foreground':colorHex(palette.foreground),'--device-muted':colorHex(palette.muted),'--device-surface':colorHex(palette.surface),'--device-accent':colorHex(palette.accent),'--device-track':colorHex(palette.track), '--status-top':395-27-gap+faceDesign.titleOffset, '--title-width':faceDesign.titleWidth, '--title-size':faceDesign.titleSize, '--title-line':sansLine(faceDesign.titleSize), '--title-color':colorHex(faceDesign.textColor), '--name-top':faceDesign.nameY, '--name-width':faceDesign.nameWidth, '--name-size':faceDesign.nameSize, '--name-line':sansLine(faceDesign.nameSize), '--name-color':colorHex(faceDesign.mutedColor), touchAction:canPage?'none':'pan-y' } as CSSProperties
+  const style = { '--device-success':colorHex(palette.success),'--device-danger':colorHex(palette.danger),'--device-background':colorHex(palette.background),'--device-foreground':colorHex(palette.foreground),'--device-muted':colorHex(palette.muted),'--device-surface':colorHex(palette.surface),'--device-accent':colorHex(palette.accent),'--device-track':colorHex(palette.track), '--status-top':395-27-gap+faceDesign.titleOffset, '--title-width':faceDesign.titleWidth, '--title-size':faceDesign.titleSize, '--title-line':sansLine(faceDesign.titleSize), '--title-color':colorHex(faceDesign.textColor), '--name-top':faceDesign.nameY, '--name-width':faceDesign.nameWidth, '--name-size':faceDesign.nameSize, '--name-line':sansLine(faceDesign.nameSize), '--name-color':colorHex(faceDesign.mutedColor), touchAction:canPage?'none':'pan-y' } as CSSProperties
 
   const switchModule = (direction: number) => {
     if (!canSwitch) return
@@ -332,25 +336,25 @@ export default function DevicePreview({ snapshot, localAnimation, localReplay = 
     <div className="dp-stage">
       <div className="dp-hardware" data-shape={panel.shape} style={{aspectRatio:'auto'}} role="group" aria-label={local ? 'Local animation preview' : 'Device screen'}>
         <div className="dp-display" data-shape={panel.shape} style={{aspectRatio:`${panel.width} / ${panel.height}`,background:colorHex(palette.background)}}>
-        <div className="device-screen" dir="ltr" style={{...style,position:'absolute',width:`${canvasSide/panel.width*100}%`,height:`${canvasSide/panel.height*100}%`,left:'50%',top:'50%',transform:'translate(-50%, -50%)',borderRadius:panel.shape==='round'?'50%':0}} tabIndex={canPage?0:undefined}
-          aria-label={module==='clock'?'Clock':module==='audio'?(display?.dashboard?.pickerOpen?'Audio devices. Use the up and down arrow keys to browse devices.':'Audio. Use the up and down arrow keys to switch input and output.'):module==='roon'?`${display?.dashboard?.playerName||'Now Playing'}. Use the up and down arrow keys to switch players.`:module!=='face'?`${module==='hey'?'Mailbox list':'Usage cards'}. Use the up and down arrow keys to browse.`:undefined}
-          onKeyDown={event=>{if(canPage&&['ArrowDown','ArrowUp'].includes(event.key)){event.preventDefault();changePage(event.key==='ArrowDown'?1:-1)}}}
+        <div className="device-screen" dir="ltr" style={{...style,position:'absolute',width:`${canvasSide/panel.width*100}%`,height:`${canvasSide/panel.height*100}%`,left:'50%',top:'50%',transform:'translate(-50%, -50%)',borderRadius:panel.shape==='round'?'50%':0}} tabIndex={hasPages?0:undefined}
+          aria-label={module==='speedDial'?'Speed Dial. Use the up and down arrow keys to browse buttons.':module==='clock'?'Clock':module==='audio'?(display?.dashboard?.pickerOpen?'Audio devices. Use the up and down arrow keys to browse devices.':'Audio. Use the up and down arrow keys to switch input and output.'):module==='roon'?`${display?.dashboard?.playerName||'Now Playing'}. Use the up and down arrow keys to switch players.`:module!=='face'?`${module==='hey'?'Mailbox list':'Usage cards'}. Use the up and down arrow keys to browse.`:undefined}
+          onKeyDown={event=>{if(canPage&&['ArrowDown','ArrowUp'].includes(event.key)){event.preventDefault();event.currentTarget.focus();changePage(event.key==='ArrowDown'?1:-1)}}}
           onPointerDown={pointerDown} onPointerUp={pointerUp}
           onPointerCancel={() => { gesture.current = null }} onLostPointerCapture={() => { gesture.current = null }}>
           {attention?.detail ? null : module === 'face' ? <Face
-            palette={palette} backgroundColor={palette.background} foregroundColor={palette.foreground} faceScale={faceDesign.scale ?? 100} textColor={faceDesign.textColor} mutedColor={faceDesign.mutedColor} animation={animation} state={pose} statusLabel={shimmer ? caption : undefined} nameLabel={nameShimmer ? subtitle : undefined}
+            palette={palette} backgroundColor={palette.background} foregroundColor={palette.foreground} faceScale={faceDesign.scale ?? 100} textColor={faceDesign.textColor} mutedColor={faceDesign.mutedColor} state={pose} statusLabel={shimmer ? caption : undefined} nameLabel={nameShimmer ? subtitle : undefined}
             changedAt={local ? localClock.changedAt : snapshot?.changedAt ?? 0}
             animationMs={local ? localClock.animationMs : snapshot?.animationMs ?? 0}
             ageMs={local ? 0 : snapshot?.ageMs ?? 0}
             reduced={snapshot?.settings.appearance.reducedMotion}
             preview={local || forcedPose} look={look}
-          /> : <ModuleDashboard module={module} dashboard={display?.dashboard} online={online}
+          /> : <ModuleDashboard module={module} dashboard={display?.dashboard} screenShape={panel.shape} online={online}
             animationMs={snapshot?.animationMs ?? 0} reduced={snapshot?.settings.appearance.reducedMotion ?? false}
-            showCardBackgrounds={snapshot?.settings.device.showCardBackgrounds === true} design={resolvedDesign} onAudioControl={onAudioControl} onAudioView={onAudioView} onRoonControl={onRoonControl} onRoonView={onRoonView} onOpenCard={onOpenCard} onSwipe={swipe} pending={pending} />}
+            showCardBackgrounds={snapshot?.settings.device.showCardBackgrounds === true} design={resolvedDesign} onAudioControl={onAudioControl} onAudioView={onAudioView} onRoonControl={onRoonControl} onRoonView={onRoonView} onOpenCard={onOpenCard} onSpeedDialRun={onSpeedDialRun} onSwipe={swipe} pending={pending} />}
           {module === 'face' && !attention?.detail && !shimmer && <div className="screen-caption"><span>{caption}</span></div>}
           {module === 'face' && !attention?.detail && !nameShimmer && <div className="screen-name">{subtitle}</div>}
           {attention && <AttentionOverlay key={`${attention.id}:${attention.revision}`} request={attention} detail={attention.detail} pending={pending || !online}/>}
-          {!attention && showNavigation && enabled.length > 1 && <div className="dp-screen-pages" aria-hidden="true">
+          {!attention && showNavigation && enabled.length > 1 && <div className="dp-screen-pages" style={module==='speedDial'?{top:`${446/466*100}%`}:undefined} aria-hidden="true">
             {enabled.map(id => <i key={id} data-active={id === module} />)}
           </div>}
         </div>

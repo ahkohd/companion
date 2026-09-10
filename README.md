@@ -12,7 +12,7 @@ To refresh the README images or build the website, see [landing page and screens
 
 ## What you can do
 
-Choose from 6 modules:
+Choose from 7 modules:
 
 | Module | What it shows | What you need |
 | --- | --- | --- |
@@ -20,6 +20,7 @@ Choose from 6 modules:
 | CodexBar | Usage balances and reset times | An installed, configured CodexBar CLI |
 | HEY | Senders and subjects from your chosen mailbox | An installed, authenticated HEY CLI |
 | Clock | Time and an optional weekday | No additional service |
+| Speed Dial | Custom buttons to launch apps, links, Shortcuts and commands | Actions run on your Mac |
 | Audio | Mac input/output device, volume and mute | macOS; controls depend on the audio device |
 | Now Playing | Album artwork, track details and playback controls for Roon, Spotify, Apple Music and macOS | Enable each player separately |
 
@@ -35,6 +36,16 @@ The bottom-right heart is reserved for sources that support changing likes. The 
 
 
 Audio starts disabled. Enable it in Modules to choose Mac input and output devices. Swipe up or down to switch between input and output, and tap the title, percentage or device name to open the device list. Swipe up or down to browse pages. The active device is first on page 1, with a check on the left; selecting any device returns to the audio controls. Volume and mute are available only when the selected device supports them. Audio controls the Mac default devices; it does not change a separate Roon network endpoint. You can adjust the layout in Designer.
+
+## Create a Speed Dial
+
+Enable Speed Dial in Modules, then select Add button. Choose an emoji, a built-in icon or your own PNG or SVG. Give it a label and add one or more actions. Save the button, then use Test to check it.
+
+Buttons can open apps, URLs, files or folders, run macOS Shortcuts, or run shell commands. A sequence runs in order and stops if an action fails. Saving or editing never runs an action. Each action has a 30-second limit; up to four buttons can run at once. Results and command output appear in the editor.
+
+Automatic grids pack buttons into staggered rows on round displays and straight rows on rectangular displays. The default design fits seven labelled buttons on the round screen or nine on a square canvas. Hide labels for a honeycomb cluster: nine large buttons, including one at the top and bottom, and four smaller side buttons. Pages hold at most thirteen buttons. Button sizes adjust to keep the cluster and page counter clear. Fixed grids of four or six buttons and lists of three or four rows are also available. Automatic grids fill from the centre outward so partial pages stay balanced. Reorder, duplicate or disable buttons in Modules. Use Designer to adjust button size, icon size, text and spacing. Swipe up or down on the device to browse pages; swipe left or right to change modules. Tap a button once to run it. A running button cannot be started again until it finishes.
+
+Emoji search works offline using bundled Frimousse data. Icons are prepared on the Mac and sent over USB, so changing an icon does not require reflashing. Install firmware built with Speed Dial support before using it on the device. See [Speed Dial configuration and actions](docs/speed-dial.md).
 
 ## Get an agent's attention request
 
@@ -86,7 +97,7 @@ The app reads data through your local integrations. Follow the [integration setu
 
 Use Animations to map expressions to Working, Needs your input, Ready, Idle, Unknown and Disconnected.
 
-The library contains 52 entries: 5 original expressions and 47 extracted Grok clips.
+The library contains 5 original expressions: Working, Needs input, Ready, Idle and Sleeping.
 
 ![Animation library with expression cards and a live preview](docs/images/animations.png)
 
@@ -252,15 +263,14 @@ Native rendering tests require a C11 compiler available as `cc`.
 
 The app uses React, TypeScript, Vite, Tailwind CSS and shadcn/ui. Firmware uses ESP-IDF and LVGL. Lockfiles record dependency versions.
 
-Generated animation binaries are not stored in Git. Normal builds recreate missing or outdated binaries. To regenerate source assets, run:
+To regenerate face profiles and font assets, run:
 
 ```sh
 pnpm faces:generate
-pnpm animations:generate
 pnpm fonts:generate
 ```
 
-## Licence and credits
+## Licence
 
 Original project code is available under the [MIT licence](LICENSE).
 
@@ -269,8 +279,8 @@ Third-party code and assets retain their own licences:
 | Source | Use | Licence and notice |
 | --- | --- | --- |
 | Bloub | Original face expressions and motion | [MIT licence](web/vendor/bloub/LICENSE), [notice](web/vendor/bloub/NOTICE.md) |
-| BIGAGENT Grok renderer | Extracted animation clips | [MIT licence](web/vendor/grok-bot/LICENSE), [extraction notice](web/vendor/grok-bot/NOTICE.md) |
 | Geist | Text and pixel fonts | [SIL Open Font License](fonts/geist/OFL.txt), [font sources](fonts/geist/README.md) |
+| Frimousse and Emojibase | Offline emoji picker and search metadata | MIT; notices shipped with the packages |
 | Reicon | Previous, next and play icons | [MIT licence](public/icons/reicon/LICENSE.txt), [icon sources](public/icons/reicon/README.md) |
 
 The bundled MediaRemote Adapter retains its BSD-3-Clause licence. Its pinned source and attribution are in `vendor/mediaremote-adapter`. The Roon client packages retain their Apache-2.0 licences. Other dependencies retain the licences distributed with their packages.

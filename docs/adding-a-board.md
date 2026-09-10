@@ -2,7 +2,7 @@
 
 Companion currently supports one tested board: Waveshare ESP32-S3-Touch-AMOLED-1.75-B. Profiles provide a place to add ports. They do not make another board compatible by themselves.
 
-Start with an ESP32-S3 board with a documented display, touch controller, enough flash for the animation library and enough PSRAM for display buffers. A similar Waveshare AMOLED board is a practical candidate. Check its exact hardware revision before selecting drivers or flashing.
+Start with an ESP32-S3 board with a documented display, touch controller, enough flash for the firmware and enough PSRAM for display buffers. A similar Waveshare AMOLED board is a practical candidate. Check its exact hardware revision before selecting drivers or flashing.
 
 ## What stays shared
 

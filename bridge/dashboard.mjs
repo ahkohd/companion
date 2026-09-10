@@ -37,6 +37,7 @@ export function heyPageCount(sources, settings) {
   return Math.max(1, Math.ceil(heyItems(sources, settings).length / heyPageSize(settings)));
 }
 export function dashboardFor(module, sources, settings, now = Date.now(), usagePage = 0, heyPage = 0) {
+  if (module === 'speedDial') return { state: 'idle', label: '', name: '', dashboard: sources.speedDial?.dashboard || { status: 'unavailable', title: 'Speed Dial', detail: 'Add buttons in Modules' } };
   if (module === 'audio') {
     const a=sources.audio||{}, enabled=settings.modules.audio.enabled;
     return {state:'idle',label:'',name:'',dashboard:{status:enabled?(wireStatus[a.status]||'unavailable'):'unavailable',title:a.scope==='input'?'Input':'Output',detail:enabled?mailWireText(a.error||'',48):'Enable Audio in Modules',scope:a.scope==='input'?'input':'output',deviceId:a.deviceId||0,nextDeviceId:a.nextDeviceId||0,deviceCount:a.deviceCount||0,deviceName:mailWireText(a.deviceName||'No device',64),volume:a.volume??null,muted:a.muted??null,canVolume:enabled&&!!a.canVolume,canMute:enabled&&!!a.canMute,pickerOpen:enabled&&!!a.pickerOpen,devices:enabled&&a.pickerOpen?(a.devices||[]).slice(0,3).map(d=>({id:d.id,name:mailWireText(d.name,64),active:!!d.active})):[],pageIndex:a.pickerOpen?(a.pageIndex||0):(a.scope==='input'?1:0),pageCount:a.pickerOpen?(a.pageCount||1):2}};

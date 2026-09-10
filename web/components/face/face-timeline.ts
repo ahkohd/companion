@@ -1,7 +1,6 @@
 import { FACE_PROFILES, FACE_STATES, FaceMotion, type FaceState } from '../../face-model'
 
 export type FaceProps = {
-  animation?: string | null
   faceScale?: number
   backgroundColor?: number
   foregroundColor?: number
@@ -87,7 +86,7 @@ export class FaceTimeline {
       age,
       gaze: this.engine.look(this.elapsed),
       color: color(FACE_PROFILES[this.engine.state].color),
-      scene: this.input.animation ? null : this.engine.scene(this.elapsed, age, this.reduced),
+      eyes: this.engine.sample(this.elapsed, this.reduced),
     }
   }
 }

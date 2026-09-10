@@ -74,31 +74,26 @@ test('playground selections reach serial and physical cycling returns to live', 
   assert.equal(frames.at(-1).preview, false);
 });
 
-test('render diagnostics publish once per ack and reject invalid decoration counts', () => {
+test('render diagnostics publish once per ack and reject invalid shimmer counts', () => {
   const {store,link}=setup();link.receive(ready);
   let updates=0;store.on('change',()=>updates++);
-  const ack={type:'ack',v:1,seq:store.seq,rendered_seq:store.seq,render_us:24000,eyes:[[24,46],[20,38]],decor_count:20,shimmer_pixels:400,text_gap:8,status_top:360};
+  const ack={type:'ack',v:1,seq:store.seq,rendered_seq:store.seq,render_us:24000,eyes:[[24,46],[20,38]],shimmer_pixels:400,text_gap:8,status_top:360};
   link.receive(JSON.stringify(ack)+'\n');
-  assert.equal(updates,1);assert.equal(store.device.renderedDecorCount,20);
+  assert.equal(updates,1);
   assert.equal(store.device.renderedShimmerPixels,400);
   assert.equal(store.device.renderedTextGap,8);assert.equal(store.device.renderedStatusTop,360);
-  link.receive(JSON.stringify({...ack,decor_count:25,shimmer_pixels:25201,text_gap:16,status_top:360})+'\n');
-  assert.equal(updates,2);assert.equal(store.device.renderedDecorCount,20);
+  link.receive(JSON.stringify({...ack,shimmer_pixels:25201,text_gap:16,status_top:360})+'\n');
+  assert.equal(updates,2);
   assert.equal(store.device.renderedShimmerPixels,400);
   assert.equal(store.device.renderedTextGap,8);assert.equal(store.device.renderedStatusTop,360);
 });
 
-test('clip diagnostics identify the rendered animation and reject malformed values', () => {
+test('obsolete clip diagnostics are ignored without a serial write loop', () => {
   const {store,link,frames}=setup();link.receive(ready);
-  const ack={type:'ack',v:1,seq:store.seq,rendered_seq:store.seq,render_us:16000,eyes:[[18,41],[18,41]],clip:47,clip_frame:40,clip_hash:0xffffffff};
   const writes=frames.length;
-  link.receive(JSON.stringify(ack)+'\n');
-  assert.equal(store.device.renderedAnimation,'grok:spin-burst');assert.equal(store.device.renderedClipFrame,40);assert.equal(store.device.renderedClipHash,0xffffffff);
-  for(const invalid of [{clip:48},{clip:-1},{clip:'1'},{clip_frame:3601},{clip_frame:-2},{clip_hash:-1},{clip_hash:0x100000000}]) {
-    link.receive(JSON.stringify({...ack,...invalid})+'\n');assert.equal(store.device.renderedAnimation,'grok:spin-burst');assert.equal(store.device.renderedClipFrame,40);assert.equal(store.device.renderedClipHash,0xffffffff);
-  }
-  link.receive(JSON.stringify({...ack,clip:0,clip_frame:-1,clip_hash:0})+'\n');
-  assert.equal(store.device.renderedAnimation,null);assert.equal(store.device.renderedClipFrame,-1);assert.equal(store.device.renderedClipHash,0);
+  link.receive(JSON.stringify({type:'ack',v:1,seq:store.seq,rendered_seq:store.seq,render_us:16000,eyes:[[18,41],[18,41]],clip:47,clip_frame:40,clip_hash:0xffffffff,decor_count:20})+'\n');
+  assert.equal(store.device.renderedSeq,store.seq);
+  for (const key of ['renderedAnimation','renderedClipFrame','renderedClipHash','renderedDecorCount']) assert.equal(key in store.device,false);
   assert.equal(frames.length,writes,'Diagnostics must not create a serial write loop');
 });
 

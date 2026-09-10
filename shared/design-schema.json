@@ -778,5 +778,73 @@
       "max": 16777215,
       "type": "color"
     }
+  ],
+  "speedDial": [
+    {
+      "key": "buttonSize",
+      "label": "Button size",
+      "default": 96,
+      "min": 48,
+      "max": 112,
+      "group": "Layout"
+    },
+    {
+      "key": "iconSize",
+      "label": "Icon size",
+      "default": 48,
+      "min": 24,
+      "max": 72,
+      "group": "Layout"
+    },
+    {
+      "key": "labelSize",
+      "label": "Label size",
+      "default": 18,
+      "min": 12,
+      "max": 28,
+      "group": "Typography"
+    },
+    {
+      "key": "gap",
+      "label": "Spacing",
+      "default": 16,
+      "min": 8,
+      "max": 24,
+      "group": "Layout"
+    },
+    {
+      "key": "offsetY",
+      "label": "Vertical offset",
+      "default": 0,
+      "min": -16,
+      "max": 16,
+      "group": "Layout"
+    },
+    {
+      "key": "rowHeight",
+      "label": "List row height",
+      "default": 76,
+      "min": 56,
+      "max": 90,
+      "group": "Layout"
+    },
+    {
+      "key": "textColor",
+      "label": "Primary text",
+      "default": 15920634,
+      "min": 0,
+      "max": 16777215,
+      "group": "Colours",
+      "type": "color"
+    },
+    {
+      "key": "mutedColor",
+      "label": "Secondary text",
+      "default": 9800868,
+      "min": 0,
+      "max": 16777215,
+      "group": "Colours",
+      "type": "color"
+    }
   ]
 }

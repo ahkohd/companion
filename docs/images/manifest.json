@@ -17,7 +17,7 @@
       "filename": "overview-light.png",
       "width": 2880,
       "height": 2000,
-      "sha256": "ab2665b305d7ed3bfb3ea215899c01fea59484500f5e82a893f30fd51863a462"
+      "sha256": "c6f3fcd3728c29aef64944fe6f16d14035f71dea9203c4164b993302c494581d"
     },
     {
       "name": "designer",
@@ -26,7 +26,7 @@
       "filename": "designer-light.png",
       "width": 2880,
       "height": 2000,
-      "sha256": "1f66f310988723d6d23b3ae041a6e5268f4421ec931322859720ab4e3510c547"
+      "sha256": "b67c307529a09db1114e35961d800afa1f5e7fa75bca1fb56362480f3cb532da"
     },
     {
       "name": "modules",
@@ -35,7 +35,7 @@
       "filename": "modules-light.png",
       "width": 2880,
       "height": 2000,
-      "sha256": "ece76a029bef015c9ade71b6d8bcf3f513fe824300634fd4c85ef334b38be8bf"
+      "sha256": "fa1dce70a976a100e91813dc344b527680ccaaaf85239d3efaff3bfd7898cf83"
     },
     {
       "name": "animations",
@@ -44,7 +44,7 @@
       "filename": "animations-light.png",
       "width": 2880,
       "height": 2000,
-      "sha256": "4ff7a6b141b7b3741dff5b4ec222f5ecb700e3b257411ba56c6b894b9225bd00"
+      "sha256": "7aaf2e4069fcde35506af3ed01c26a7856b0c074c5dd45cc77d2be050463597c"
     },
     {
       "name": "overview",
@@ -53,7 +53,7 @@
       "filename": "overview-dark.png",
       "width": 2880,
       "height": 2000,
-      "sha256": "39a3c50b231b2a373d1d46786bbf2904e80836d303a2275eb5a5c978198dbd87"
+      "sha256": "b2715572c67ecd343cd934776a7285e4c6ebda969d306a94e0599b0bac22c10c"
     },
     {
       "name": "designer",
@@ -62,7 +62,7 @@
       "filename": "designer-dark.png",
       "width": 2880,
       "height": 2000,
-      "sha256": "2f2386096541f2dd385b2d4cd5d104c1b32a6faecfccbd16b784e231f0160198"
+      "sha256": "e9da64d308348a7b83cd2e80add207d5f1a024ddd89567090d2a1703e19aecb2"
     },
     {
       "name": "modules",
@@ -71,7 +71,7 @@
       "filename": "modules-dark.png",
       "width": 2880,
       "height": 2000,
-      "sha256": "ed4895f987d2c5a309081cc329d36fa620b1fc2b4cfa1e09c3fd1cc730ee116f"
+      "sha256": "63b2ed3c20badeddb3c409314caa09724581b9061be445155394053ddc6d5c6d"
     },
     {
       "name": "animations",
@@ -80,7 +80,7 @@
       "filename": "animations-dark.png",
       "width": 2880,
       "height": 2000,
-      "sha256": "8fef884ba8a66ac1bf0c125b0598d439db2a9222d856146f7f98840b39b9ce18"
+      "sha256": "dccfbd75e5c01c8aba8abf50d0d32f67100c402a2874c585abc590111f7c48d4"
     }
   ]
 }

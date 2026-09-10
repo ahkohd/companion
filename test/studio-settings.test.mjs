@@ -27,6 +27,28 @@ test('settings migrate legacy text spacing and persist display and mouse prefere
   assert.deepEqual(JSON.parse(await readFile(filePath, 'utf8')), next.settings);
 });
 
+test('removed clip mappings fall back without losing any other saved settings', async t => {
+  const { settings, store, filePath } = await fixture(t);
+  const saved = mergeSettings(defaultSettings(), {
+    device: { activeModule: 'speedDial', rotation: 90, textGap: 16 },
+    design: { speedDial: { labelSize: 26 } },
+    mappings: { idle: 'working', disconnected: 'sleep' },
+    modules: { speedDial: { enabled: true, buttons: [{ id: 'kept', label: 'Keep me', enabled: true, color: null,
+      icon: { kind: 'builtin', value: 'zap', assetId: 'a'.repeat(64) }, actions: [{ type: 'url', value: 'https://example.com' }] }] } },
+  });
+  saved.mappings.working = 'grok:happy'; saved.mappings.blocked = 'grok:angry'; saved.mappings.done = 'grok:celebrate';
+  const expected = structuredClone(saved);
+  for (const state of ['working', 'blocked', 'done']) expected.mappings[state] = null;
+  await writeFile(filePath, JSON.stringify(saved)); await settings.load();
+  assert.deepEqual(store.settings, expected);
+  await assert.rejects(settings.save({ mappings: { working: 'grok:happy' } }), /valid animation/);
+  assert.throws(() => store.setExpression('grok:happy'), /Unknown expression/);
+  await settings.save({ appearance: { theme: 'light' } }); expected.appearance.theme = 'light';
+  assert.deepEqual(JSON.parse(await readFile(filePath, 'utf8')), expected);
+  const restarted = new StudioSettings(new FaceStore(), { filePath }); await restarted.load();
+  assert.deepEqual(restarted.value, expected);
+});
+
 test('concurrent partial settings merge in order without losing unrelated changes', async t => {
   const { settings, store } = await fixture(t); await settings.load();
   await settings.save({ appearance: { theme: 'light' }, modules: { usage: { enabled: false }, hey: { enabled: false }, clock: { enabled: false } } });
@@ -36,12 +58,12 @@ test('concurrent partial settings merge in order without losing unrelated change
     settings.save({ modules: { face: { enabled: false } } }),
     settings.save({ appearance: { theme: 'dark' } }),
     settings.save({ device: { textGap: 4 } }),
-    settings.save({ mappings: { working: 'grok:happy' } }),
+    settings.save({ mappings: { working: 'done' } }),
   ]);
   assert.equal(results[0].modules.face.enabled, true); assert.equal(results[1].modules.face.enabled, false);
   assert.equal(store.activeModule, 'usage'); assert.equal(store.settings.device.activeModule, 'usage');
   assert.equal(store.settings.appearance.theme, 'dark'); assert.equal(store.textGap, 4);
-  assert.equal(store.settings.mappings.working, 'grok:happy'); assert.equal(store.settingsRevision, revision + 5);
+  assert.equal(store.settings.mappings.working, 'done'); assert.equal(store.settingsRevision, revision + 5);
 });
 
 test('failed writes do not change live settings and the write queue recovers', async t => {
@@ -77,7 +99,7 @@ test('module activation and queued swipes preserve order and skip disabled modul
   const { settings, store, filePath } = await fixture(t); await settings.load();
   await settings.save({ modules: { usage: { enabled: false }, hey: { enabled: false }, clock: { enabled: false } } });
   await assert.rejects(settings.activateModule('usage'), /Enable/);
-  await settings.save({ modules: { usage: { enabled: true }, hey: { enabled: true } }, device: { moduleOrder: ['hey', 'face', 'usage', 'clock', 'roon', 'audio'] } });
+  await settings.save({ modules: { usage: { enabled: true }, hey: { enabled: true } }, device: { moduleOrder: ['hey', 'face', 'usage', 'clock', 'roon', 'audio', 'speedDial'] } });
   await Promise.all([settings.cycleModule(1), settings.cycleModule(1)]);
   assert.equal(store.activeModule, 'hey'); assert.equal(JSON.parse(await readFile(filePath, 'utf8')).device.activeModule, 'hey');
   await settings.save({ modules: { usage: { enabled: false } } });
@@ -106,16 +128,16 @@ test('unrelated settings and identical saves preserve animation age', async t =>
   assert.equal(store.settingsRevision, revision);
 });
 
-test('all native and Grok remaps preserve logical statuses and captions', () => {
+test('native remaps preserve logical statuses and captions', () => {
   const store = new FaceStore(); store.ingest([{ pane_id: 'a', agent: 'pi', agent_status: 'working', name: 'Project task' }]); store.select('a');
   store.setSettings(mergeSettings(defaultSettings(), { mappings: { working: 'sleep' } }));
   assert.equal(store.frame().state, 'working'); assert.equal(store.frame().expression, 'sleep');
   assert.equal(store.frame().label, 'Working'); assert.equal(store.frame().name, 'Project task'); assert.equal(store.frame().preview, false);
-  store.setSettings(mergeSettings(store.settings, { mappings: { working: 'grok:happy' } }));
-  assert.equal(store.frame().animation, 'grok:happy'); assert.equal(store.frame().state, 'working');
+  store.setSettings(mergeSettings(store.settings, { mappings: { working: 'done' } }));
+  assert.equal(store.frame().expression, 'done'); assert.equal(store.frame().state, 'working');
   store.setExpression('unknown'); assert.equal(store.frame().state, 'unknown'); assert.equal(store.frame().label, 'Status unknown');
   store.setExpression('disconnected'); assert.equal(store.frame().state, 'disconnected');
-  store.setExpression(null); assert.equal(store.frame().animation, 'grok:happy');
+  store.setExpression(null); assert.equal(store.frame().expression, 'done');
 });
 
 test('existing settings default to hidden navigation and preserve the choice after restart', async t => {

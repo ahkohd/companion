@@ -3,7 +3,7 @@ import { writeFile, readFile } from 'node:fs/promises';
 const result=await build({configFile:false,logLevel:'silent',build:{write:false,minify:false,lib:{entry:'web/face-model.ts',formats:['es']}}});
 const bundle=Array.isArray(result)?result[0]:result;
 const code=bundle.output.find(item=>item.type==='chunk'&&item.isEntry).code;
-const {FACE_STATES,FACE_PROFILES,BOUNCES,PARTICLES,LOOK_RESPONSE,LOOK_SETTLE_SECONDS}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
+const {FACE_STATES,FACE_PROFILES,LOOK_RESPONSE,LOOK_SETTLE_SECONDS}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
 const float=n=>`${Number(n).toFixed(8)}f`;
 const lines=FACE_STATES.map(state=>{
   const p=FACE_PROFILES[state];
@@ -14,16 +14,3 @@ const target='firmware/main/face_profiles.h';
 if(process.argv.includes('--check')) {
   if(await readFile(target,'utf8')!==header) throw new Error('Firmware face profiles are stale. Run npm run faces:generate.');
 } else await writeFile(target,header);
-
-const accentHeader=`/* Generated from web/vendor/grok-bot/motion.ts. See its NOTICE.md and LICENSE. */
-static const double GROK_BOUNCES[4][2] = {
-${BOUNCES.map(b=>`    {${b.join(', ')}},`).join('\n')}
-};
-static const particle_seed_t GROK_PARTICLES[20] = {
-${PARTICLES.map(p=>`    {${[p.x,p.y,p.vx,p.vy,p.life,p.size,p.angle,p.spin].map(float).join(', ')}, 0x${p.color.toString(16)}, ${p.shape}},`).join('\n')}
-};
-`;
-const accentTarget='firmware/main/face_accents.h';
-if(process.argv.includes('--check')) {
-  if(await readFile(accentTarget,'utf8')!==accentHeader) throw new Error('Firmware accents are stale. Run npm run faces:generate.');
-} else await writeFile(accentTarget,accentHeader);

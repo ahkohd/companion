@@ -165,12 +165,12 @@ test('HTTP and SSE serve real state, restrict writes and shut down cleanly', { t
   const updates = await Promise.all([
     change({ modules: { usage: { enabled: true }, hey: { enabled: true } } }),
     change({ device: { textGap: 16, swipeEnabled: false } }),
-    change({ mappings: { working: 'grok:happy', blocked: 'sleep' } }),
+    change({ mappings: { working: 'done', blocked: 'sleep' } }),
   ]);
   assert.ok(updates.every(response => response.status === 200));
   const studioState = await (await fetch(base + '/api/state')).json();
   assert.equal(studioState.settings.device.textGap, 16); assert.equal(studioState.settings.device.mouseInterval, 250);
-  assert.equal(studioState.settings.modules.usage.enabled, true); assert.equal(studioState.settings.mappings.working, 'grok:happy');
+  assert.equal(studioState.settings.modules.usage.enabled, true); assert.equal(studioState.settings.mappings.working, 'done');
   const usageModule = await (await post('/api/module', { id: 'usage' })).json(); assert.equal(usageModule.module, 'usage');
   const usage = await (await post('/api/modules/refresh', { id: 'usage' })).json();
   assert.equal(usage.display.dashboard.pageCount, 3); assert.equal(usage.display.dashboard.pageIndex, 0);
@@ -216,7 +216,7 @@ test('HTTP and SSE serve real state, restrict writes and shut down cleanly', { t
   }
   const persisted = JSON.parse(await readFile(studioPath, 'utf8'));
   assert.equal(persisted.device.textGap, 16); assert.equal(persisted.device.followMouse, false); assert.equal(persisted.device.mouseInterval, 250);
-  assert.equal(persisted.device.activeModule, 'usage'); assert.equal(persisted.mappings.working, 'grok:happy');
+  assert.equal(persisted.device.activeModule, 'usage'); assert.equal(persisted.mappings.working, 'done');
   const exited = once(child, 'exit'); child.kill('SIGTERM');
   assert.equal((await exited)[0], 0, logs);
 });

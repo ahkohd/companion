@@ -58,7 +58,7 @@ Subprocesses receive fixed executable names and argument arrays, without a shell
 
 ## Display designer
 
-Settings persist per-module `design` records. Every field is an integer validated against `shared/design-schema.json`, including colour values and font-size choices. Partial updates use `POST /api/settings` and preserve other modules. Old settings files receive the default designs automatically. State frames include the active module's `design` array in schema order only when customized; omission restores defaults. State frames allow up to 2048 bytes, and oversized updates report an error rather than silently disappearing.
+Settings persist per-module `design` records. Every field is an integer validated against `shared/design-schema.json`, including colour values and font-size choices. Partial updates use `POST /api/settings` and preserve other modules. Old settings files receive the default designs automatically. State frames include the active module's `design` array in schema order only when customized; omission restores defaults. State frames allow up to 4096 bytes, and oversized updates report an error rather than silently disappearing.
 
 Font sizes use bounded integers rather than preset enums. Usage `numberSize: 0` retains automatic sizing; other percentage sizes are 24..160, as are clock digits. Sans roles accept 12..48. The firmware uses bounded, role-owned TinyTTF glyph caches for intermediate sizes and preserves existing bitmap sizes. Face `scale` accepts 50..150 percent, default100, and changes rendered geometry without resetting animation clocks.
 

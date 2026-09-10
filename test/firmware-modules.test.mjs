@@ -43,7 +43,7 @@ test('module protocol retains legacy defaults and distinguishes missing values f
 test('module parser rejects invalid kinds, positions and truncated or oversized metric data', needsIdf, () => {
   const invalid = [
     { module: 'calendar' }, { module: null }, { moduleIndex: 1 }, { moduleCount: 2 },
-    { moduleIndex: 3, moduleCount: 3 }, { moduleIndex: 0, moduleCount: 0 }, { moduleIndex: 0, moduleCount: 7 },
+    { moduleIndex: 3, moduleCount: 3 }, { moduleIndex: 0, moduleCount: 0 }, { moduleIndex: 0, moduleCount: 8 },
     { moduleIndex: 0.5, moduleCount: 2 }, { dashboard: null },
     ...[null, 'true', 1, []].map(showModuleNavigation => ({ showModuleNavigation })),
     ...['missing', null, 1, true].map(status => ({ dashboard: { status } })),

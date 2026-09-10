@@ -44,11 +44,10 @@ Run the hardware checks one at a time while the bridge remains stopped:
 ```sh
 .venv/bin/python scripts/check-module-device.py "$ESP_SERIAL_PORT"
 .venv/bin/python scripts/check-device.py "$ESP_SERIAL_PORT"
-.venv/bin/python scripts/check-grok-device.py "$ESP_SERIAL_PORT"
 .venv/bin/python firmware/check_attention_device.py "$ESP_SERIAL_PORT"
 ```
 
-The module check covers usage and HEY states, missing and zero usage values, empty and paged mailbox lists, UTF-8 limits, live expression mappings and invalid frames. The original check covers native faces, timing, gaze and layout. The Grok check compares every clip against browser-decoded frame hashes.
+The module check covers usage and HEY states, missing and zero usage values, empty and paged mailbox lists, UTF-8 limits, live expression mappings and invalid frames. The original check covers native faces, timing, gaze and layout.
 
 Set `ESP_SERIAL_PORT` in `.env` for future sessions, then run `pnpm start`. The board can take up to 8 seconds after a previous connection to announce readiness again. Updates currently use USB; there is no OTA update path.
 
@@ -79,7 +78,7 @@ Optional fields:
 | `moduleIndex`, `moduleCount` | Position among enabled modules; provide both or neither. Count is 1 to 5 and index is from 0 to count minus one. Defaults are 0 and 1 |
 | `dashboard` | Module metrics and connection state; omitted data remains unavailable |
 | `expression` | A native pose override; omitted or null uses the logical `state` |
-| `animation` | A Grok catalogue ID; omitted or null uses native rendering |
+| `animation` | Legacy field; only omitted or null is accepted |
 | `preview` | Boolean marking an explicit preview; defaults to false |
 | `animationMs`, `ageMs` | Host animation clock and state age; provide both or neither |
 | `epoch` | Unsigned 32-bit replay identifier |
@@ -106,13 +105,11 @@ When no valid host frame has arrived for 8 seconds, the face shows Disconnected 
 {"type":"state","v":1,"seq":1,"state":"working","expression":"sleep","label":"Working","name":"Build project","counts":{"working":1,"blocked":0,"done":0,"idle":0,"unknown":0}}
 ```
 
-Grok clips can also map to live statuses. A valid `animation` no longer requires `preview:true` or `state:"idle"`. Unknown clip IDs and invalid expression values still reject the frame. When a clip is present, it supplies the character rendering; logical status and label fields stay intact.
-
 The renderer runs on a 33 ms timer. Native expression transitions take 450 ms. Bloub supplies the eye profiles, perspective, gaze drift and repeating blink calendar. Default live idle becomes sleepy after 30 seconds. Explicit Sleep closes the eyes immediately; explicit Idle and idle previews stay awake.
 
-Native Working shimmers its status text, including when another native eye pose is mapped to it. Grok clips and usage or HEY dashboards do not add the native shimmer. The original Working pose has no bouncing dots. Ready plays its short completion motion and confetti, then settles.
+Working shimmers its status text, including when another native eye pose is mapped to it. Ready uses the original wink. The faces retain their blinking and mouse-following without added spins, bounces or confetti.
 
-`face_profiles.h` is generated from `web/face-model.ts`; `face_accents.h` is generated from the retained Grok motion extraction. `face_model.c` projects and rasterises the eyes into an RGB565 canvas. `face_decor.c` draws clipped, alpha-blended accents. Native rendering and browser geometry are compared by `pnpm test`; SVG and RGB565 antialiasing can differ slightly.
+`face_profiles.h` is generated from `web/face-model.ts`. `face_model.c` projects and rasterises the eyes into an RGB565 canvas. Native rendering and browser geometry are compared by `pnpm test`; SVG and RGB565 antialiasing can differ slightly.
 
 ## Module dashboards
 
@@ -200,7 +197,7 @@ Each contact produces at most one action. A swipe cannot also become a tap. Long
 
 ## Timing, gaze and typography
 
-`animationMs` is the host's monotonic animation time. `ageMs` is the age of the current display state. They preserve blinking, clip position and idle sleep through ordinary updates and reconnection. The optional `epoch` distinguishes explicit replays. Small clock corrections within 100 ms are ignored while the display state and epoch remain unchanged.
+`animationMs` is the host's monotonic animation time. `ageMs` is the age of the current display state. They preserve blinking and idle sleep through ordinary updates and reconnection. The optional `epoch` distinguishes explicit replays. Small clock corrections within 100 ms are ignored while the display state and epoch remain unchanged.
 
 For mouse gaze, `look:{"x":-1,"y":-1}` means the top left of the current monitor, `{"x":1,"y":1}` the bottom right, and zero the centre. Both values must be finite numbers in [-1, 1]. Omit `look` or use null to restore natural gaze. Host timeout also releases the gaze.
 
@@ -212,15 +209,7 @@ The session-name row starts at y=395. Status begins at `395 - 27 - textGap` for 
 
 The 340 x 32 RGB565 shimmer mask occupies 21,760 bytes of PSRAM. `face_shimmer.c` tints it using the host clock and the colour curve in `shared/shimmer.json`.
 
-## Grok collection and memory
-
-All 47 Grok clips use the same lossless RGB565 decoder and integer bilinear scaling as the browser. Each preset is a deterministic eight-second capture at 24 fps. States loop; actions finish once and can be replayed. `ageMs` selects the frame, so reconnecting does not restart a clip.
-
-Normal web and firmware builds regenerate missing or stale assets. Run `pnpm animations:generate` to rebuild the complete collection.
-
-The 13.5 MB library stays in flash. Do not enable `CONFIG_SPIRAM_RODATA` or `CONFIG_SPIRAM_XIP_FROM_PSRAM`: the library cannot fit in 8 MB PSRAM. Instruction fetching from PSRAM remains enabled. A decoded 192 x 168 RGB565 frame occupies 64,512 bytes.
-
-See [Grok extraction provenance](../web/vendor/grok-bot/NOTICE.md), [Bloub attribution](../web/vendor/bloub/NOTICE.md) and [Geist font sources](../fonts/geist/README.md) for licences and regeneration details.
+See [Bloub attribution](../web/vendor/bloub/NOTICE.md) and [Geist font sources](../fonts/geist/README.md) for licences and regeneration details.
 
 ## Render acknowledgements
 
@@ -232,11 +221,8 @@ Every accepted state frame receives an `ack` containing its `seq`. Render diagno
 | `module` | Rendered `face`, `usage`, `hey`, `clock` or `roon` module |
 | `render_us` | Render duration in microseconds |
 | `eyes` | Each eye's width and height in model units; zeroed for dashboards |
-| `decor_count` | Number of native decorations rendered |
 | `shimmer_pixels` | Number of status-mask pixels rendered, or zero when inactive |
 | `text_gap`, `status_top` | Actual rendered text layout |
-| `clip` | One-based Grok catalogue index, or zero when no clip was rendered |
-| `clip_frame`, `clip_hash` | Rendered clip frame index and RGB565 source-frame hash |
 
 To verify a change reached the screen, wait for `rendered_seq` to match the sent frame as well as its ACK. Diagnostics alone do not trigger another host state frame, avoiding a serial feedback loop.
 
@@ -244,7 +230,7 @@ To verify a change reached the screen, wait for `rendered_seq` to match the sent
 
 `showCardBackgrounds` is an optional boolean. Missing or false leaves usage and HEY cards on the black screen; true shows their dark panels. Borderless usage sections use larger percentages and closer spacing. HEY keeps the same text and layout. The playground saves this preference under Device > Display.
 
-The optional boolean `nameShimmer` animates the Face session subtitle in Geist Sans16 at its existing position. The host cycles working session names every four seconds in All agents; name changes do not restart the face animation. Missing or false keeps the subtitle static. Local previews, non-Face modules and host disconnection suppress subtitle shimmer. Mapped Grok clips support it. ACK diagnostics report `name_shimmer_pixels`.
+The optional boolean `nameShimmer` animates the Face session subtitle in Geist Sans16 at its existing position. The host cycles working session names every four seconds in All agents; name changes do not restart the face animation. Missing or false keeps the subtitle static. Local previews, non-Face modules and host disconnection suppress subtitle shimmer. Mapped native expressions support it. ACK diagnostics report `name_shimmer_pixels`.
 
 ### Now Playing sources
 

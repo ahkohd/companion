@@ -23,7 +23,7 @@ before(async () => {
     const functions = source.slice(source.indexOf('static bool json_uint('), source.indexOf('static bool name_shimmer_enabled('))
       .replace(/static int status_top_for_gap\([^]*?\n}\n/, '')
     const definitions = source.match(/^#define (?:FRAME_MAX|FACE_LABEL_CAPACITY|FACE_NAME_CAPACITY|TEXT_GAP_DEFAULT) .*$/gm).join('\n')
-    const code = `#include <math.h>\n#include <stdio.h>\n#include <string.h>\n#include "face_model.h"\n#include "grok_catalog.h"\n#include "display_module.h"\n#include "attention_protocol.h"\n${definitions}\n${type}\n${functions}\nint main(void) { char line[4096]; while(fgets(line,sizeof(line),stdin)) { status_snapshot_t frame={0}; size_t length=strlen(line); if(length&&line[length-1]=='\\n') line[--length]=0; puts(parse_state_frame(line,length,&frame)?"true":"false"); } }\n`
+    const code = `#include <math.h>\n#include <stdio.h>\n#include <string.h>\n#include "face_model.h"\n#include "display_module.h"\n#include "attention_protocol.h"\n${definitions}\n${type}\n${functions}\nint main(void) { char line[8192]; while(fgets(line,sizeof(line),stdin)) { status_snapshot_t frame={0}; size_t length=strlen(line); if(length&&line[length-1]=='\\n') line[--length]=0; puts(parse_state_frame(line,length,&frame)?"true":"false"); } }\n`
     const sourcePath = path.join(directory, 'frames.c'); frameProbe = path.join(directory, 'frames')
     await writeFile(sourcePath, code)
     execFileSync('cc', ['-std=c11', '-O2', '-Wall', '-Wextra', '-Werror', '-I', 'firmware/main', '-I', cjson,
@@ -72,14 +72,23 @@ test('native rejects partial arrays, invalid numeric fields and unsupported opti
   assert.deepEqual(parse(frames), frames.map(() => null))
 })
 
-test('production state parser accepts 2048-byte designer frames and rejects overflow', needsIdf, () => {
+test('production state parser accepts 4096-byte designer frames and rejects overflow', needsIdf, () => {
   const frame = { type: 'state', v: 1, seq: 4, state: 'working', label: 'Working', name: 'Session',
     counts: { working: 1, blocked: 0, done: 0, idle: 0, unknown: 0 }, design: defaults('face'), padding: '' }
   const base = JSON.stringify(frame).length
-  const inputs = [1024, 1025, 2048, 2049].map(bytes => JSON.stringify({ ...frame, padding: 'x'.repeat(bytes - base) }))
+  const inputs = [2048, 2049, 4096, 4097].map(bytes => JSON.stringify({ ...frame, padding: 'x'.repeat(bytes - base) }))
   const results = execFileSync(frameProbe, [], { input: inputs.join('\n') + '\n', encoding: 'utf8' }).trim().split('\n').map(JSON.parse)
   assert.deepEqual(results, [true, true, true, false])
 })
+
+test('production state parser rejects removed clips and accepts native overrides', needsIdf, () => {
+  const frame = { type: 'state', v: 1, seq: 7, state: 'working', label: 'Working', name: 'Session',
+    counts: { working: 1, blocked: 0, done: 0, idle: 0, unknown: 0 } };
+  const valid = [frame, { ...frame, animation: null }, ...['working', 'blocked', 'done', 'idle', 'sleep', 'unknown', 'disconnected'].map(expression => ({ ...frame, expression }))];
+  const invalid = ['grok:happy', 'grok:celebrate', 'done', '', true, 1, [], {}].map(animation => ({ ...frame, animation }));
+  const result = execFileSync(frameProbe, [], { input: [...valid, ...invalid].map(JSON.stringify).join('\n') + '\n', encoding: 'utf8' }).trim().split('\n').map(JSON.parse);
+  assert.deepEqual(result, [...valid.map(() => true), ...invalid.map(() => false)]);
+});
 
 test('production state parser accepts every integer rotation and retains legacy frames', needsIdf, () => {
   const frame = { type: 'state', v: 1, seq: 7, state: 'idle', label: 'Idle', name: '',
@@ -114,3 +123,11 @@ test('attention double tap never emits first approval and cancels stale gestures
     'test/attention-gesture-probe.c', 'firmware/main/attention_gesture.c', '-o', gestureProbe])
   execFileSync(gestureProbe)
 })
+
+
+test('production frame boundary rejects escaped NUL before cJSON can truncate identifiers', needsIdf, () => {
+  const frame = {type:'state',v:1,seq:7,state:'idle',label:'Idle',name:'',counts:{working:0,blocked:0,done:0,idle:0,unknown:0}};
+  const frames = [{...frame,name:'safe\u0000hidden'},{...frame,name:'safe\\u0000'}];
+  const results=execFileSync(frameProbe,[],{input:frames.map(JSON.stringify).join('\n')+'\n',encoding:'utf8'}).trim().split('\n').map(JSON.parse);
+  assert.deepEqual(results,[false,true]);
+});

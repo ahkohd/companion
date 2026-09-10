@@ -169,10 +169,10 @@ test('playground works without Herdr and selection or touch clears it', () => {
 });
 
 test('animation epoch changes for explicit replays but stays fixed through heartbeats and gaze', () => {
-  const store=new FaceStore();store.setExpression('grok:happy');
+  const store=new FaceStore();store.setExpression('done');
   const epoch=store.frame().epoch;
   store.publish();store.setPointer({x:.2,y:.5});assert.equal(store.frame().epoch,epoch);
-  store.setExpression('grok:happy');assert.equal(store.frame().epoch,(epoch+1)>>>0);
-  store.setExpression('grok:angry');assert.equal(store.frame().epoch,(epoch+2)>>>0);
+  store.setExpression('done');assert.equal(store.frame().epoch,(epoch+1)>>>0);
+  store.setExpression('blocked');assert.equal(store.frame().epoch,(epoch+2)>>>0);
   store.setExpression(null);assert.equal(store.frame().epoch,(epoch+3)>>>0);
 });

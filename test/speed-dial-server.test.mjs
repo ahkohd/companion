@@ -1,0 +1,42 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
+import { once } from 'node:events';
+import { spawn } from 'node:child_process';
+import { setTimeout as delay } from 'node:timers/promises';
+import path from 'node:path';
+import os from 'node:os';
+import sharp from 'sharp';
+import { defaultSettings } from '../bridge/studio-settings.mjs';
+
+test('Speed Dial HTTP saves without executing, checks revisions and tokens, and persists icons', {timeout:15000}, async t => {
+  const dir=await mkdtemp(path.join(os.tmpdir(),'companion-dial-http-'));
+  const settings=defaultSettings();for(const config of Object.values(settings.modules))config.enabled=false;settings.modules.speedDial.enabled=true;settings.device.activeModule='speedDial';settings.device.followMouse=false;
+  await writeFile(path.join(dir,'studio.json'),JSON.stringify(settings));await writeFile(path.join(dir,'device-connection.json'),JSON.stringify({mode:'off',path:'',serialNumber:''}));
+  const child=spawn(process.execPath,['bridge/server.mjs'],{env:{...process.env,PORT:'0',STUDIO_SETTINGS_PATH:path.join(dir,'studio.json'),DISPLAY_SETTINGS_PATH:path.join(dir,'display.json'),ROON_PAIRING_PATH:path.join(dir,'roon.json'),COMPANION_INSTALL_HOME:dir},stdio:['ignore','pipe','pipe']});
+  let errors='';child.stderr.on('data',chunk=>{errors+=chunk});
+  t.after(async()=>{if(child.exitCode===null){const exit=once(child,'exit');child.kill('SIGTERM');await exit;}await rm(dir,{recursive:true,force:true});});
+  const [output]=await once(child.stdout,'data');const base=output.toString().match(/http:\/\/127\.0\.0\.1:\d+/)?.[0];assert.ok(base,errors);
+  const post=(route,body,headers={})=>fetch(base+'/api/'+route,{method:'POST',headers:{'Content-Type':'application/json',...headers},body:JSON.stringify(body)});
+  const state=async()=>await(await fetch(base+'/api/state')).json();
+  const png=await sharp({create:{width:96,height:96,channels:4,background:'#cccccc'}}).png().toBuffer();
+  const response=await post('speed-dial/icon',{dataUrl:'data:image/png;base64,'+png.toString('base64')});assert.equal(response.status,200);const asset=await response.json();
+  assert.equal((await fetch(base+asset.url)).status,200);
+  assert.equal((await post('speed-dial/icon',{dataUrl:'data:image/png;base64,'+png.toString('base64')},{Origin:'https://example.com'})).status,403);
+  const marker=path.join(dir,'executed');const item={id:'__proto__',label:'Test',enabled:true,color:null,icon:{kind:'builtin',value:'zap',assetId:asset.assetId},actions:[{type:'shell',value:`printf 'finished' > '${marker}'`}]};
+  const saved=await post('settings',{modules:{speedDial:{buttons:[item]}}});assert.equal(saved.status,200);const snapshot=await saved.json();
+  await assert.rejects(()=>readFile(marker),{code:'ENOENT'});
+  assert.equal((await post('speed-dial/run',{id:item.id})).status,400);
+  assert.equal((await post('speed-dial/run',{id:item.id,revision:snapshot.settingsRevision-1})).status,400);
+  assert.equal((await post('speed-dial/run',{id:item.id,token:'0'.repeat(40)})).status,400);
+  assert.equal((await post('speed-dial/run',{id:item.id,revision:snapshot.settingsRevision},{Origin:'https://example.com'})).status,403);
+  const started=await post('speed-dial/run',{id:item.id,revision:snapshot.settingsRevision});assert.equal(started.status,200);
+  for(let i=0;i<100;i++){if((await state()).modules.speedDial.results[item.id]?.status==='success')break;await delay(20);}
+  assert.equal((await state()).modules.speedDial.results[item.id].status,'success');assert.equal(await readFile(marker,'utf8'),'finished');
+  const token=(await state()).display.dashboard.openToken;
+  const changed=await post('settings',{design:{speedDial:{gap:20}}});assert.equal(changed.status,200);
+  assert.equal((await post('speed-dial/run',{id:item.id,token})).status,400);
+  const large={...item,id:'long',actions:Array.from({length:8},()=>({type:'shell',value:'#'+ 'x'.repeat(2998)}))};
+  assert.equal((await post('settings',{modules:{speedDial:{buttons:[large]}}})).status,200);
+  assert.equal((await post('speed-dial/run',{id:item.id,revision:(await state()).settingsRevision})).status,400);
+});

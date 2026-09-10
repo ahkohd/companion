@@ -45,7 +45,7 @@ with serial.Serial(args.port, 115200, timeout=0.15, write_timeout=2) as device:
             status=status, title='Codex', detail='Usage from CodexBar',
             primary=dict(provider='Codex', label='Session', remaining=73.25, reset='Resets in 2h'),
             secondary=dict(provider='Claude', label='Weekly', remaining=None, reset='Reset unavailable')))
-        assert drawn.get('module') == 'usage' and drawn.get('shimmer_pixels') == 0 and drawn.get('clip') == 0, drawn
+        assert drawn.get('module') == 'usage' and drawn.get('shimmer_pixels') == 0, drawn
         assert drawn.get('page_index') == 0 and drawn.get('page_count') == 1, drawn
     print('PASS: usage module renders every connection state without the face or shimmer', flush=True)
 
@@ -101,7 +101,7 @@ with serial.Serial(args.port, 115200, timeout=0.15, write_timeout=2) as device:
                                       weekday=weekday, refreshing=True))
         assert drawn.get('module') == 'clock' and drawn.get('shimmer_pixels') == 0, drawn
         assert drawn.get('page_index') == 0 and drawn.get('page_count') == 1, drawn
-        assert drawn.get('refreshing') is False and drawn.get('clip') == 0, drawn
+        assert drawn.get('refreshing') is False, drawn
     print('PASS: Clock renders 12-hour, 24-hour and optional weekday in four-module navigation', flush=True)
 
     drawn = render(module='face', expression='sleep')
@@ -116,16 +116,8 @@ with serial.Serial(args.port, 115200, timeout=0.15, write_timeout=2) as device:
     assert all(abs(eye[1] - 7) < .02 for eye in drawn['eyes']), drawn
     print('PASS: explicit idle pose stays awake; default idle retains automatic sleep', flush=True)
 
-    from pathlib import Path
-    import re
-    catalog = Path(__file__).resolve().parents[1] / 'firmware/main/grok_catalog.h'
-    clip = re.search(r'\{"([^"\n]+)"', catalog.read_text()).group(1)
-    drawn = render(module='face', animation=clip, preview=False)
-    assert drawn.get('module') == 'face' and drawn.get('clip', 0) > 0 and drawn.get('shimmer_pixels') == 0, drawn
-    print('PASS: Grok animation maps to a live state without status shimmer', flush=True)
-
     invalid = [dict(module='invalid'), dict(module='hey', moduleIndex=3, moduleCount=3),
-               dict(module='clock', moduleIndex=4, moduleCount=5),
+               dict(module='clock', moduleIndex=7, moduleCount=7),
                dict(expression='invalid'), dict(expression=True),
                dict(module='usage', dashboard=dict(status='ready', primary=dict(remaining=-1))),
                dict(module='usage', dashboard=dict(status='ready', primary=dict(provider='x' * 17))),

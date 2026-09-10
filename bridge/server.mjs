@@ -1,3 +1,4 @@
+import { SpeedDial, SpeedDialIcons } from './speed-dial.mjs';
 import { AudioSource } from './audio-source.mjs';
 import { Installations } from './installations.mjs';
 import { AppSettings } from './app-settings.mjs';
@@ -34,14 +35,18 @@ const pointer = new PointerTracker(store);
 const sources = new ModuleSources();
 const audio = new AudioSource();
 const roon = new NowPlayingSource({ pairingPath: process.env.ROON_PAIRING_PATH || undefined });
+const settingsDirectory = path.dirname(process.env.STUDIO_SETTINGS_PATH || fileURLToPath(new URL('../.cache/studio-settings.json', import.meta.url)));
+const speedDialIcons = new SpeedDialIcons(path.join(settingsDirectory, 'speed-dial-icons'));
+const speedDial = new SpeedDial({ icons: speedDialIcons });
 let device, requestedArtId;
 async function syncArtwork() {
   if (!device) return;
-  const id = store.activeModule === 'roon' && studio.value.modules.roon.enabled ? roon.snapshot().artId || '' : '';
+  const isDial = store.activeModule === 'speedDial' && studio.value.modules.speedDial.enabled;
+  const id = isDial ? speedDial.art?.id || '' : store.activeModule === 'roon' && studio.value.modules.roon.enabled ? roon.snapshot().artId || '' : '';
   if (id === requestedArtId) return;
   requestedArtId = id; device.setArtwork(null);
   if (!id) return;
-  const art = await roon.artwork(id);
+  const art = isDial ? speedDial.art : await roon.artwork(id);
   if (requestedArtId === id && art) device.setArtwork(art);
 }
 let listening = false, closing = false;
@@ -70,6 +75,7 @@ const studio = new StudioSettings(store, {
     }
   },
 });
+speedDial.on('change', snapshot => store.setSources({ speedDial: snapshot }));
 audio.on('change', snapshot => store.setSources({audio:snapshot}));
 sources.on('change', snapshot => store.setSources(snapshot));
 roon.on('change', snapshot => { store.setSources({ roon: snapshot }); void syncArtwork().catch(() => {}); });
@@ -78,8 +84,20 @@ const attentionCallbacks = new AttentionCallbacks();
 const attention = new Attention(store, { deliver: (target, result) => attentionCallbacks.deliver(target, result), filePath: path.join(path.dirname(studio.filePath), 'attention-settings.json') });
 await attention.load();
 await systemAppearance.start();
+speedDial.configure(studio.value, store.systemAppearance, store.device.profile);
 store.setSources({ roon: roon.snapshot(), audio:audio.snapshot() });
+function runSpeedDial(request) {
+  if (request.token === undefined && (!Number.isSafeInteger(request.revision) || request.revision !== store.settingsRevision)) throw Error('The settings changed. Review this button before testing again.');
+  if (request.token !== undefined && (store.activeModule !== 'speedDial' || !studio.value.modules.speedDial.enabled || attention.active)) throw Error('Show Speed Dial first.');
+  speedDial.run(request);
+}
+function pageSpeedDial(request) {
+  if (store.activeModule !== 'speedDial' || !studio.value.modules.speedDial.enabled || attention.active) throw Error('Show Speed Dial first.');
+  speedDial.page(request);
+}
 device = new DeviceLink(store, {
+  onSpeedDialRun: request => mutate(() => runSpeedDial(request)),
+  onSpeedDialPage: direction => mutate(() => pageSpeedDial({direction})),
   onAttention: request => mutate(() => request.action === '__dismiss' ? attention.dismiss(request) : request.action === 'open' || request.action === 'back' ? attention.details({ ...request, detail: request.action === 'open' }) : attention.act(request)),
   onModule: direction => mutate(() => studio.cycleModule(direction)),
   onUsagePage: direction => mutate(() => store.cycleUsage(direction)),
@@ -99,7 +117,7 @@ const connection = new SerialConnection(store, { link: device, filePath: path.jo
 const streams = new Set();
 const send = (res, code, data) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2' };
-const writeRoutes = ['show', 'update', 'clear', 'act', 'details', 'dismiss', 'configure'].map(action => `/api/attention/${action}`).concat(['/api/audio/view', '/api/audio/page', '/api/audio/control', '/api/installations', '/api/app-settings', '/api/native/sync', '/api/select', '/api/expression', '/api/pointer', '/api/display', '/api/settings', '/api/module', '/api/modules/refresh', '/api/usage/page', '/api/hey/page', '/api/roon/control', '/api/roon/player', '/api/roon/view', '/api/open-card', '/api/device/connection', '/api/device/refresh', '/api/device/reconnect']);
+const writeRoutes = ['show', 'update', 'clear', 'act', 'details', 'dismiss', 'configure'].map(action => `/api/attention/${action}`).concat(['/api/speed-dial/icon', '/api/speed-dial/run', '/api/speed-dial/page', '/api/audio/view', '/api/audio/page', '/api/audio/control', '/api/installations', '/api/app-settings', '/api/native/sync', '/api/select', '/api/expression', '/api/pointer', '/api/display', '/api/settings', '/api/module', '/api/modules/refresh', '/api/usage/page', '/api/hey/page', '/api/roon/control', '/api/roon/player', '/api/roon/view', '/api/open-card', '/api/device/connection', '/api/device/refresh', '/api/device/reconnect']);
 const server = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
@@ -119,6 +137,12 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/api/app-settings' && req.method === 'GET') return send(res, 200, appSettings.snapshot());
   if (url.pathname === '/api/logs' && req.method === 'GET') return send(res, 200, logs.snapshot());
   if (url.pathname === '/api/state' && req.method === 'GET') return send(res, 200, store.snapshot());
+  if (url.pathname.startsWith('/api/speed-dial/icons/') && req.method === 'GET') {
+    const match = url.pathname.match(/^\/api\/speed-dial\/icons\/([a-f0-9]{64})\.png$/);
+    const bytes = match ? await speedDialIcons.read(match[1]) : null;
+    if (!bytes) return send(res, 404, {error:'Icon unavailable'});
+    res.writeHead(200, {'Content-Type':'image/png','Cache-Control':'private, max-age=31536000, immutable'}); return res.end(bytes);
+  }
   if (url.pathname.startsWith('/api/roon/art/') && req.method === 'GET') {
     const id = url.pathname.slice('/api/roon/art/'.length);
     if (!/^[a-f0-9]{40}$/.test(id)) return send(res, 404, {error:'Artwork unavailable'});
@@ -130,14 +154,13 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/native/sync' && !appSettings.authorized(req.headers['x-companion-token'])) return send(res, 403, { error: 'Native app authentication required' });
     if (req.headers.origin && !['http://127.0.0.1:5173', 'http://localhost:5173', `http://127.0.0.1:${port}`, `http://localhost:${port}`].includes(req.headers.origin)) return send(res, 403, { error: 'Origin not allowed' });
     if (!req.headers['content-type']?.startsWith('application/json')) return send(res, 415, { error: 'Use JSON' });
-    let body = '';
     try {
-      // Settings can contain all animation mappings and provider choices. Serial frames
-      // keep their separate 2048-byte limit in DeviceLink.
-      let bytes = 0; const limit = (url.pathname === '/api/settings' || url.pathname.startsWith('/api/attention/')) ? 16384 : 1024;
-      for await (const chunk of req) { bytes += chunk.length; if (bytes > limit) return send(res, 413, { error: 'Request too large' }); body += chunk; }
-      const request = JSON.parse(body);
+      const chunks = []; let bytes = 0;
+      const limit = url.pathname === '/api/settings' ? 262144 : url.pathname === '/api/speed-dial/icon' ? 190000 : url.pathname.startsWith('/api/attention/') ? 16384 : 1024;
+      for await (const chunk of req) { bytes += chunk.length; if (bytes > limit) return send(res, 413, { error: 'Request too large' }); chunks.push(chunk); }
+      const request = JSON.parse(Buffer.concat(chunks).toString('utf8'));
       if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('Send a JSON object.');
+      if (url.pathname === '/api/speed-dial/icon') return send(res, 200, await speedDialIcons.save(request.dataUrl));
       if (url.pathname === '/api/native/sync') return send(res, 200, appSettings.sync(request));
       if (url.pathname === '/api/installations') return send(res, 200, await installations.change(request));
       if (url.pathname === '/api/app-settings') return send(res, 200, await appSettings.change(request));
@@ -147,7 +170,9 @@ const server = http.createServer(async (req, res) => {
       }
       const snapshot = await mutate(async () => {
         if (url.pathname.startsWith('/api/attention/')) { const result = await attention[url.pathname.split('/').at(-1)](request); return { ...store.snapshot(), attentionResult: result }; }
-        if (url.pathname === '/api/device/connection') await connection.configure(request);
+        if (url.pathname === '/api/speed-dial/run') runSpeedDial(request);
+        else if (url.pathname === '/api/speed-dial/page') pageSpeedDial(request);
+        else if (url.pathname === '/api/device/connection') await connection.configure(request);
         else if (url.pathname === '/api/device/refresh') await connection.refresh();
         else if (url.pathname === '/api/device/reconnect') await connection.reconnect();
         else if (url.pathname === '/api/settings') await studio.save(request);
@@ -192,6 +217,7 @@ const server = http.createServer(async (req, res) => {
 });
 logs.observeDevice(store.device);
 store.on('change', snapshot => {
+  if (speedDial.configure(store.settings, store.systemAppearance, store.device.profile)) return;
   logs.observeDevice(snapshot.device);
   void syncArtwork().catch(() => {});
   const payload = `data: ${JSON.stringify(snapshot)}\n\n`;
@@ -207,5 +233,5 @@ server.listen(port, '127.0.0.1', () => {
   void connection.start().catch(error => store.setDevice({ status: 'disconnected', error: error.message })); void sources.start(); void roon.start(); audio.start();
 });
 server.on('error', error => { console.error(error.message); shutdown(); process.exitCode = 1; });
-function shutdown() { if (closing) return; closing = true; listening = false; clearInterval(keepAlive); clearInterval(clockTick); appSettings.stop(); attention.stop(); attentionCallbacks.stop(); systemAppearance.stop(); sources.stop(); roon.stop(); audio.stop(); pointer.stop(); herdr.stop(); void connection.stop(); for (const res of streams) res.end(); server.close(); restoreConsole(); }
+function shutdown() { if (closing) return; closing = true; listening = false; clearInterval(keepAlive); clearInterval(clockTick); appSettings.stop(); attention.stop(); attentionCallbacks.stop(); speedDial.stop(); systemAppearance.stop(); sources.stop(); roon.stop(); audio.stop(); pointer.stop(); herdr.stop(); void connection.stop(); for (const res of streams) res.end(); server.close(); restoreConsole(); }
 process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);

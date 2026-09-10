@@ -1,6 +1,5 @@
 import { memo, useEffect, useId, useLayoutEffect, useState } from 'react'
 import { customShimmerGradient, paletteShimmerGradient } from '../../shimmer'
-import GrokFace from './GrokFace'
 import { faceMode, FaceTimeline, type FaceProps } from './face-timeline'
 
 export type { FaceProps } from './face-timeline'
@@ -29,7 +28,7 @@ function Face(props: FaceProps) {
 
   useLayoutEffect(() => {
     setFrame(timeline.update(props, reduced, performance.now(), Date.now()))
-  }, [timeline, props.animation, props.state, props.changedAt, props.animationMs, props.ageMs,
+  }, [timeline, props.state, props.changedAt, props.animationMs, props.ageMs,
     props.preview, props.look?.x, props.look?.y, reduced])
 
   useEffect(() => {
@@ -70,31 +69,18 @@ function Face(props: FaceProps) {
     if(color!==undefined)eyeColor=`#${color.toString(16).padStart(6,'0')}`
   }
   return <>
-    {props.animation ? (
-      <GrokFace backgroundColor={props.backgroundColor} foregroundColor={props.foregroundColor} faceScale={props.faceScale} animation={props.animation} age={frame.age} gaze={frame.gaze} reduced={reduced} />
-    ) : (
       <svg className="face-art" viewBox="-128 -128 256 256" role="img" aria-label={`${frame.mode} face`}>
         <defs>
           <clipPath id={`clip-${uid}`}><circle r="100" /></clipPath>
-          <clipPath id={`decor-${uid}`}><rect x="-100" y="-100" width="200" height="170" /></clipPath>
         </defs>
         <g transform={`scale(${(props.faceScale ?? 100)/100})`}>
         <g clipPath={`url(#clip-${uid})`} fill={eyeColor}>
-          {frame.scene?.eyes.map((eye, index) => (
+          {frame.eyes.map((eye, index) => (
             <path key={index} d={eye.d} transform={`matrix(${eye.matrix.join(',')})`} opacity={eye.alpha} />
           ))}
         </g>
-        <g clipPath={`url(#clip-${uid})`}>
-          <g clipPath={`url(#decor-${uid})`} className="face-decor">
-            {frame.scene?.decor.map((item, index) => (
-              <polygon key={index} points={item.points.map(point => point.join(',')).join(' ')}
-                fill={`#${item.color.toString(16).padStart(6, '0')}`} opacity={item.alpha} />
-            ))}
-          </g>
-        </g>
         </g>
       </svg>
-    )}
     {props.statusLabel && (
       <div className="screen-caption">
         <span className="shimmer-text" style={{ backgroundImage: props.palette?paletteShimmerGradient(frame.time,reduced,props.palette.muted,props.palette.foreground):customShimmerGradient(frame.time, reduced, props.textColor ?? 0xf2edfa) }}>

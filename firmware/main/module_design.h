@@ -109,6 +109,17 @@ typedef struct {
     int32_t mutedColor;
 } audio_design_t;
 
+typedef struct {
+    int32_t buttonSize;
+    int32_t iconSize;
+    int32_t labelSize;
+    int32_t gap;
+    int32_t offsetY;
+    int32_t rowHeight;
+    int32_t textColor;
+    int32_t mutedColor;
+} speedDial_design_t;
+
 typedef union {
     face_design_t face;
     usage_design_t usage;
@@ -116,6 +127,7 @@ typedef union {
     clock_design_t clock;
     roon_design_t roon;
     audio_design_t audio;
+    speedDial_design_t speedDial;
     int32_t values[28];
 } module_design_t;
 
@@ -128,6 +140,7 @@ static inline unsigned module_design_length(unsigned kind)
         case 3: return 9;
         case 4: return 15;
         case 5: return 11;
+        case 6: return 8;
         default: return 0;
     }
 }
@@ -233,6 +246,16 @@ static inline void module_design_default(unsigned kind, module_design_t *out)
             .controlsY = 358,
             .controlSize = 64,
             .gap = 12,
+            .textColor = 15920634,
+            .mutedColor = 9800868,
+        }; break;
+        case 6: out->speedDial = (speedDial_design_t){
+            .buttonSize = 96,
+            .iconSize = 48,
+            .labelSize = 18,
+            .gap = 16,
+            .offsetY = 0,
+            .rowHeight = 76,
             .textColor = 15920634,
             .mutedColor = 9800868,
         }; break;
@@ -346,6 +369,17 @@ static inline bool module_design_valid(unsigned kind, unsigned field, int32_t va
             case 8: return (value >= 8 && value <= 50);
             case 9: return (value >= 0 && value <= 16777215);
             case 10: return (value >= 0 && value <= 16777215);
+            default: return false;
+        }
+        case 6: switch (field) {
+            case 0: return (value >= 48 && value <= 112);
+            case 1: return (value >= 24 && value <= 72);
+            case 2: return (value >= 12 && value <= 28);
+            case 3: return (value >= 8 && value <= 24);
+            case 4: return (value >= -16 && value <= 16);
+            case 5: return (value >= 56 && value <= 90);
+            case 6: return (value >= 0 && value <= 16777215);
+            case 7: return (value >= 0 && value <= 16777215);
             default: return false;
         }
         default: return false;

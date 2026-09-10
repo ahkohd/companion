@@ -18,13 +18,13 @@ const input = overrides => ({
 })
 const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} differs from ${expected}`)
 
-test('host time advances across a hidden tab without replaying completed confetti', () => {
+test('host time advances across a hidden tab while retaining the original eyes', () => {
   const timeline = new FaceTimeline(input({ state: 'done', ageMs: 0 }), false, 500, 200_000)
-  assert.ok(timeline.tick(1700, 201_200).scene.decor.length > 0)
+  assert.deepEqual(timeline.tick(1700, 201_200).eyes, timeline.engine.sample(101.2))
   const resumed = timeline.tick(61_700, 261_200)
   near(resumed.time, 161.2)
   near(resumed.age, 61.2)
-  assert.equal(resumed.scene.decor.length, 0)
+  assert.deepEqual(resumed.eyes, timeline.engine.sample(resumed.time))
 })
 
 test('a restarted host preserves the current gaze and expression transition', () => {
@@ -64,7 +64,7 @@ test('idle sleeps at 30 seconds while an idle preview stays awake', () => {
   assert.equal(preview.tick(61_000, 260_000).mode, 'idle')
 })
 
-test('enabling reduced motion settles an ongoing gaze without animated decorations', () => {
+test('enabling reduced motion settles an ongoing gaze', () => {
   const start = input({ state: 'working' })
   const timeline = new FaceTimeline(start, false, 1000, 200_000)
   const following = { ...start, look: { x: 1, y: -1 } }
@@ -73,20 +73,20 @@ test('enabling reduced motion settles an ongoing gaze without animated decoratio
   assert.ok(moving.gaze.x > .2 && moving.gaze.x < .35)
   const still = timeline.update(following, true, 1200, 200_200)
   assert.deepEqual(still.gaze, { x: 1, y: -1, mix: 1 })
-  assert.deepEqual(still.scene.decor, [])
+  assert.deepEqual(still.eyes, timeline.engine.sample(still.time, true))
   near(timeline.tick(10_000, 209_000).time, still.time)
   const resumed = timeline.update(following, false, 10_000, 209_000)
   near(resumed.time, 109)
 })
 
-test('replaying a clip resets its age and preserves the pointer glide', () => {
-  const start = input({ animation: 'grok:celebrate', look: { x: .8, y: -.4 } })
+test('replaying an expression resets its age and preserves the pointer glide', () => {
+  const start = input({ state: 'done', look: { x: .8, y: -.4 } })
   const timeline = new FaceTimeline(start, false, 1000, 200_000)
   const before = timeline.tick(1200, 200_200)
   const replay = timeline.update({ ...start, animationMs: 100_200, ageMs: 0, changedAt: 200_200 }, false, 1200, 200_200)
   assert.equal(replay.age, 0)
   assert.deepEqual(replay.gaze, before.gaze)
-  assert.equal(replay.scene, null)
+  assert.deepEqual(replay.eyes, timeline.engine.sample(replay.time))
 })
 
 test('unknown states and invalid initial timestamps still render finite eyes', () => {
@@ -94,13 +94,13 @@ test('unknown states and invalid initial timestamps still render finite eyes', (
   const frame = timeline.sample()
   assert.equal(frame.mode, 'unknown')
   assert.equal(frame.age, 0)
-  assert.equal(frame.scene.eyes.length, 2)
-  assert.ok(frame.scene.eyes.every(eye => eye.matrix.every(Number.isFinite)))
+  assert.equal(frame.eyes.length, 2)
+  assert.ok(frame.eyes.every(eye => eye.matrix.every(Number.isFinite)))
 })
 
 test('changing face size leaves age, gaze and expression timing unchanged', () => {
-  for (const reduced of [false, true]) for (const animation of [undefined, 'grok:radar']) {
-    const props = input({ state: 'working', animation, look: { x: .4, y: -.2 }, faceScale: 100 })
+  for (const reduced of [false, true]) {
+    const props = input({ state: 'working', look: { x: .4, y: -.2 }, faceScale: 100 })
     const timeline = new FaceTimeline(props, reduced, 500, 200_000)
     const before = timeline.sample()
     for (const faceScale of [50, 150, 100]) {

@@ -1,5 +1,3 @@
-import { grokAccent, type Accent } from './vendor/grok-bot/motion'
-export { BOUNCES, PARTICLES, grokAccent } from './vendor/grok-bot/motion'
 import { STATE_BY_ID } from './vendor/bloub/states'
 import { EXPRESSION_BY_ID } from './vendor/bloub/expressions'
 import { eyePoses, liveliness, blinkScale } from './vendor/bloub/face'
@@ -73,17 +71,5 @@ export class FaceMotion {
     const current=this.lookSample(time)
     this.lookFrom=current.value;this.lookVelocity=current.velocity;this.lookTarget=next;this.lookSince=time
   }
-  scene(time:number,age:number,still=false) {
-    const accent=grokAccent(this.state,age,still)
-    return {eyes:accentEyes(this.sample(time,still),accent),decor:accent.decor}
-  }
   sample(time:number,still=false) {return renderEyes(this.profile(time),still?0:time,this.look(time))}
-}
-
-export function accentEyes(eyes:ReturnType<typeof renderEyes>,accent:Accent) {
-  const angle=accent.rotation*Math.PI/180,c=Math.cos(angle)*accent.scale,s=Math.sin(angle)*accent.scale
-  return eyes.map(eye=>({...eye,matrix:eye.matrix.map((_,i,m)=>{
-    const j=i-i%2,x=m[j]!,y=m[j+1]!
-    return i%2?s*x+c*y+(j===4?accent.y:0):c*x-s*y+(j===4?accent.x:0)
-  })}))
 }

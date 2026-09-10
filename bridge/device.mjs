@@ -1,7 +1,6 @@
 import { profileForReady } from './board-profiles.mjs';
 import { SerialPort } from 'serialport';
 import { randomInt } from 'node:crypto';
-import grokCatalog from '../shared/grok-catalog.json' with { type: 'json' };
 import displayLayout from '../shared/display-layout.json' with { type: 'json' };
 import { MODULE_IDS } from './studio-settings.mjs';
 
@@ -16,9 +15,10 @@ function crc32(bytes) {
 }
 
 export class DeviceLink {
-  constructor(store, { port = process.env.ESP_SERIAL_PORT || '', baudRate = 115200, onAttention = null, onModule = null, onUsagePage = null, onHeyPage = null, onRoonControl = null, onRoonPlayer = null, onRoonView = null, onAudioPage = null, onAudioView = null, onAudioControl = null, onOpenCard = null, Port = SerialPort } = {}) {
+  constructor(store, { port = process.env.ESP_SERIAL_PORT || '', baudRate = 115200, onAttention = null, onModule = null, onUsagePage = null, onHeyPage = null, onRoonControl = null, onRoonPlayer = null, onRoonView = null, onSpeedDialRun = null, onSpeedDialPage = null, onAudioPage = null, onAudioView = null, onAudioControl = null, onOpenCard = null, Port = SerialPort } = {}) {
     this.Port = Port; this.store = store; this.path = port; this.baudRate = baudRate; this.buffer = ''; this.stopped = true;
     this.onAttention = onAttention; this.onModule = onModule; this.onUsagePage = onUsagePage; this.onHeyPage = onHeyPage;
+    this.onSpeedDialRun = onSpeedDialRun; this.onSpeedDialPage = onSpeedDialPage;
     this.onAudioView = onAudioView; this.onAudioPage = onAudioPage; this.onAudioControl = onAudioControl;
     this.onOpenCard = onOpenCard; this.onRoonControl = onRoonControl; this.onRoonPlayer = onRoonPlayer; this.onRoonView = onRoonView; this.artwork = null; this.artCounter = randomInt(1, 0x100000000);
     this.onChange = () => { if (this.lastSeq !== this.store.seq) this.send(); };
@@ -110,15 +110,6 @@ export class DeviceLink {
           if (Number.isSafeInteger(message.rotation_us) && message.rotation_us >= 0) update.rotationUs = message.rotation_us;
           if (Number.isSafeInteger(message.rotation_pixels) && message.rotation_pixels >= 0 && message.rotation_pixels <= 466 * 466) update.rotationPixels = message.rotation_pixels;
           if (typeof message.font_error === 'boolean') update.fontError = message.font_error;
-          if (Number.isInteger(message.clip) && message.clip >= 0 && message.clip <= grokCatalog.length &&
-              Number.isInteger(message.clip_frame) && message.clip_frame >= -1 && message.clip_frame < 3601 &&
-              Number.isInteger(message.clip_hash) && message.clip_hash >= 0 && message.clip_hash <= 0xffffffff) {
-            Object.assign(update, { renderedAnimation: message.clip ? grokCatalog[message.clip - 1].id : null,
-              renderedClipFrame: message.clip_frame, renderedClipHash: message.clip_hash });
-          }
-          if (Number.isInteger(message.decor_count) && message.decor_count >= 0 && message.decor_count <= 24) {
-            update.renderedDecorCount = message.decor_count;
-          }
           if (Number.isInteger(message.shimmer_pixels) && message.shimmer_pixels >= 0 && message.shimmer_pixels <= 25200) {
             update.renderedShimmerPixels = message.shimmer_pixels;
           }
@@ -145,6 +136,10 @@ export class DeviceLink {
       } else if (message.type === 'open-card' && this.ready && this.onOpenCard && ['hey', 'usage'].includes(message.module) && message.module === this.store.activeModule && Number.isInteger(message.index) && message.index >= 0 && message.index <= (message.module === 'usage' ? 1 : 2) && typeof message.token === 'string' && /^[a-f0-9]{40}$/.test(message.token)) {
         Promise.resolve().then(() => this.onOpenCard({module: message.module, index: message.index, token: message.token}))
           .catch(error => this.store.setDevice({ error: error.message || 'Could not open this card. Try again in the playground.' }));
+      } else if (message.type === 'speed-dial-run' && this.ready && this.store.activeModule === 'speedDial' && this.store.settings.modules.speedDial?.enabled && typeof message.id === 'string' && /^[A-Za-z0-9_-]{1,48}$/.test(message.id) && typeof message.token === 'string' && /^[a-f0-9]{40}$/.test(message.token)) {
+        Promise.resolve().then(() => this.onSpeedDialRun?.({id:message.id,token:message.token})).catch(error => this.store.setDevice({error:error.message}));
+      } else if (message.type === 'speed-dial-page' && this.ready && this.store.activeModule === 'speedDial' && this.store.settings.modules.speedDial?.enabled && [-1,1].includes(message.direction)) {
+        Promise.resolve().then(() => this.onSpeedDialPage?.(message.direction)).catch(error => this.store.setDevice({error:error.message}));
       } else if (message.type === 'audio-page' && this.ready && this.store.activeModule === 'audio' && this.store.settings.modules.audio?.enabled && [-1, 1].includes(message.direction)) {
         Promise.resolve().then(() => this.onAudioPage?.(message.direction))
           .catch(() => this.store.setDevice({ error: 'Could not change the audio page.' }));
@@ -177,9 +172,9 @@ export class DeviceLink {
     if (!this.ready || !this.port?.isOpen || this.writing) return;
     const frame = JSON.stringify(this.store.frame()) + '\n';
     const bytes = Buffer.byteLength(frame);
-    if (bytes > 2048) {
+    if (bytes > 4096) {
       this.lastSeq = this.store.seq;
-      this.frameError = `Device update is too large (${bytes} bytes; maximum 2048). Reduce the display content and try again.`;
+      this.frameError = `Device update is too large (${bytes} bytes; maximum 4096). Reduce the display content and try again.`;
       this.store.setDevice({ error: this.frameError });
       return;
     }

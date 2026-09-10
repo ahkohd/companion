@@ -28,16 +28,13 @@
 _Static_assert(COMPANION_DISPLAY_WIDTH == 466 && COMPANION_DISPLAY_HEIGHT == 466,
     "Port module layout and screen rotation before using a different canvas");
 
-#define FRAME_MAX 2048
+#define FRAME_MAX 4096
 #define FACE_LABEL_CAPACITY 97
 #define FACE_NAME_CAPACITY 193
 #include "face_model.h"
-#include "face_accent.h"
 #include "face_shimmer.h"
 #include "fonts/geist.h"
 #include "design_fonts.h"
-#include "grok_player.h"
-#include "grok_catalog.h"
 #include "display_module.h"
 #include "module_view.h"
 #include "module_touch.h"
@@ -45,8 +42,6 @@ _Static_assert(COMPANION_DISPLAY_WIDTH == 466 && COMPANION_DISPLAY_HEIGHT == 466
 #include "attention_gesture.h"
 #include "roon_artwork.h"
 #include "screen_rotation.h"
-extern const uint8_t grok_clips_start[] asm("_binary_grok_clips_bin_start");
-extern const uint8_t grok_clips_end[] asm("_binary_grok_clips_bin_end");
 
 #define DISCONNECT_US (8LL * 1000 * 1000)
 #define READY_PERIOD_US (2LL * 1000 * 1000)
@@ -69,7 +64,6 @@ typedef struct {
     bool has_expression;
     module_snapshot_t module;
     attention_snapshot_t attention;
-    int clip;
     uint32_t seq;
     uint16_t counts[5];
     char label[FACE_LABEL_CAPACITY];
@@ -97,12 +91,11 @@ static SemaphoreHandle_t state_mutex;
 static QueueHandle_t cycle_queue;
 static attention_gesture_t attention_gesture;
 static uint32_t attention_touch_revision;
-typedef struct { int8_t action; music_player_t player; bool audio_input, audio_muted; uint32_t audio_device_id, audio_target_device_id; float audio_volume; module_card_target_t card; char attention_id[37], attention_action[33]; uint32_t attention_revision; } touch_message_t;
+typedef struct { int8_t action; music_player_t player; bool audio_input, audio_muted; uint32_t audio_device_id, audio_target_device_id; float audio_volume; module_card_target_t card; char speed_dial_id[SPEED_DIAL_ID_CAPACITY], speed_dial_token[41]; char attention_id[37], attention_action[33]; uint32_t attention_revision; } touch_message_t;
 static roon_artwork_t roon_artwork;
 static uint32_t shown_art_revision;
 static status_snapshot_t shared_status = {
     .state = FACE_DISCONNECTED,
-    .clip = -1,
     .module = {.kind = DISPLAY_FACE, .count = 1, .status = MODULE_UNAVAILABLE,
         .palette = {0,0xf2edfa,0x958ca4,0x151515,0x2b2b2b,0x65c18c,0x65c18c,0xd9be81,0xe88483}},
     .label = "Disconnected",
@@ -113,15 +106,9 @@ static status_snapshot_t shared_status = {
 static lv_obj_t *face_canvas;
 static uint16_t *face_pixels;
 static face_motion_t motion;
-static grok_player_t clip_player;
-static uint16_t *clip_pixels;
-static int active_clip = -1;
-static int rendered_clip = -1, rendered_clip_frame = -1;
-static uint32_t rendered_clip_hash;
 static face_eye_t rendered_eyes[2];
 static uint32_t rendered_seq;
 static uint32_t render_us;
-static int rendered_decor_count;
 static int rendered_shimmer_pixels;
 static int rendered_name_shimmer_pixels;
 static int rendered_text_gap = TEXT_GAP_DEFAULT;
@@ -205,9 +192,19 @@ static bool parse_face_state(const char *value, face_state_t *state)
     return false;
 }
 
+static bool frame_has_null_escape(const char *line, size_t length)
+{
+    for (size_t i = 0; i + 1 < length; ++i) {
+        if (line[i] != '\\') continue;
+        if (i + 5 < length && !memcmp(line + i + 1, "u0000", 5)) return true;
+        i++;
+    }
+    return false;
+}
+
 static bool parse_state_frame(const char *line, size_t length, status_snapshot_t *parsed)
 {
-    if (length == 0 || length > FRAME_MAX || memchr(line, '\0', length) != NULL) {
+    if (length == 0 || length > FRAME_MAX || memchr(line, '\0', length) != NULL || frame_has_null_escape(line, length)) {
         return false;
     }
 
@@ -243,13 +240,8 @@ static bool parse_state_frame(const char *line, size_t length, status_snapshot_t
     const cJSON *name_shimmer = cJSON_GetObjectItemCaseSensitive(root, "nameShimmer");
     if (name_shimmer != NULL && !cJSON_IsBool(name_shimmer)) goto done;
     parsed->name_shimmer = cJSON_IsTrue(name_shimmer);
-    const cJSON *clip = cJSON_GetObjectItemCaseSensitive(root, "animation");
-    parsed->clip = -1;
-    if (clip != NULL && !cJSON_IsNull(clip)) {
-        if (!cJSON_IsString(clip)) goto done;
-        for (int i=0;i<GROK_CLIP_COUNT;i++) if (strcmp(clip->valuestring,GROK_CLIPS[i].id)==0) {parsed->clip=i;break;}
-        if (parsed->clip<0) goto done;
-    }
+    const cJSON *legacy_animation = cJSON_GetObjectItemCaseSensitive(root, "animation");
+    if (legacy_animation != NULL && !cJSON_IsNull(legacy_animation)) goto done;
     const cJSON *expression = cJSON_GetObjectItemCaseSensitive(root, "expression");
     parsed->has_expression = expression != NULL && !cJSON_IsNull(expression);
     if (parsed->has_expression && (!cJSON_IsString(expression) ||
@@ -354,13 +346,13 @@ static void protocol_self_check(void)
     assert(status_top_for_gap(4) == 364 && status_top_for_gap(8) == 360 && status_top_for_gap(16) == 352);
     char mapped[768];
     int mapped_length = snprintf(mapped, sizeof(mapped),
-        "{\"type\":\"state\",\"v\":1,\"seq\":9,\"state\":\"working\",\"animation\":\"%s\","
+        "{\"type\":\"state\",\"v\":1,\"seq\":9,\"state\":\"working\","
         "\"expression\":\"sleep\",\"module\":\"face\",\"moduleIndex\":0,\"moduleCount\":3,"
         "\"label\":\"Working\",\"name\":\"Agent\",\"counts\":{"
-        "\"working\":1,\"blocked\":0,\"done\":0,\"idle\":0,\"unknown\":0}}", GROK_CLIPS[0].id);
+        "\"working\":1,\"blocked\":0,\"done\":0,\"idle\":0,\"unknown\":0}}");
     assert(mapped_length > 0 && (size_t)mapped_length < sizeof(mapped));
     assert(parse_state_frame(mapped, (size_t)mapped_length, &parsed));
-    assert(parsed.state == FACE_WORKING && !parsed.preview && parsed.clip == 0);
+    assert(parsed.state == FACE_WORKING && !parsed.preview);
     assert(parsed.has_expression && parsed.expression == FACE_SLEEP && parsed.module.count == 3);
     static const char *flags[] = {"true", "false", "null", "1", "\"true\"", "[]", "{}"};
     for (size_t i = 0; i < sizeof(flags) / sizeof(flags[0]); ++i) {
@@ -373,8 +365,8 @@ static void protocol_self_check(void)
         if (i < 2) assert(parsed.name_shimmer == (i == 0));
     }
     parsed = (status_snapshot_t){.state = FACE_BLOCKED, .name_shimmer = true,
-        .module = {.kind = DISPLAY_FACE}, .name = "Working session", .clip = 0};
-    assert(name_shimmer_enabled(&parsed, false)); // blocked with workers and a mapped Grok clip
+        .module = {.kind = DISPLAY_FACE}, .name = "Working session"};
+    assert(name_shimmer_enabled(&parsed, false)); // blocked with workers
     assert(!name_shimmer_enabled(&parsed, true));
     parsed.preview = true;
     assert(!name_shimmer_enabled(&parsed, false));
@@ -417,7 +409,7 @@ static void accept_state(const status_snapshot_t *parsed)
     bool was_disconnected = !shared_status.ever_received ||
                             now - shared_status.last_valid_us >= DISCONNECT_US;
     bool reset_age = was_disconnected || shared_status.state != parsed->state ||
-        shared_status.preview != parsed->preview || shared_status.clip != parsed->clip ||
+        shared_status.preview != parsed->preview ||
         shared_status.has_expression != parsed->has_expression || shared_status.expression != parsed->expression ||
         shared_status.module.kind != parsed->module.kind ||
         (parsed->has_epoch && (!shared_status.has_epoch || shared_status.epoch != parsed->epoch));
@@ -431,7 +423,7 @@ static void accept_state(const status_snapshot_t *parsed)
     shared_status.has_epoch = parsed->has_epoch;
     shared_status.epoch = parsed->has_epoch ? parsed->epoch : 0;
     if (was_disconnected || shared_status.state != parsed->state || shared_status.preview != parsed->preview || shared_status.status_dots != parsed->status_dots || shared_status.name_shimmer != parsed->name_shimmer ||
-        shared_status.text_gap != parsed->text_gap || shared_status.rotation != parsed->rotation || shared_status.clip != parsed->clip ||
+        shared_status.text_gap != parsed->text_gap || shared_status.rotation != parsed->rotation ||
         memcmp(&shared_status.module, &parsed->module, sizeof(parsed->module)) != 0 ||
         memcmp(&shared_status.attention, &parsed->attention, sizeof(parsed->attention)) != 0 ||
         strcmp(shared_status.label, parsed->label) != 0 || strcmp(shared_status.name, parsed->name) != 0) ++shared_status.revision;
@@ -442,7 +434,6 @@ static void accept_state(const status_snapshot_t *parsed)
     shared_status.name_shimmer = parsed->name_shimmer;
     shared_status.text_gap = parsed->text_gap; // layout only: never resets the animation age
     shared_status.rotation = parsed->rotation;
-    shared_status.clip = parsed->clip;
     shared_status.expression = parsed->expression;
     shared_status.has_expression = parsed->has_expression;
     shared_status.module = parsed->module;
@@ -457,11 +448,9 @@ static void accept_state(const status_snapshot_t *parsed)
     shared_status.last_valid_us = now;
     shared_status.ever_received = true;
     uint32_t drawn_seq = rendered_seq, duration = render_us;
-    int decor_count = rendered_decor_count, shimmer_pixels = rendered_shimmer_pixels;
+    int shimmer_pixels = rendered_shimmer_pixels;
     int name_shimmer_pixels = rendered_name_shimmer_pixels;
     int text_gap = rendered_text_gap, status_top = rendered_status_top;
-    int clip_id = rendered_clip + 1, clip_frame = rendered_clip_frame;
-    uint32_t clip_hash = rendered_clip_hash;
     display_module_t drawn_module = rendered_module;
     uint16_t page_index = rendered_page_index, page_count = rendered_page_count;
     bool refreshing = rendered_refreshing;
@@ -474,8 +463,8 @@ static void accept_state(const status_snapshot_t *parsed)
 
     char ack[1024];
     snprintf(ack, sizeof(ack), "{\"type\":\"ack\",\"v\":1,\"seq\":%" PRIu32
-        ",\"rendered_seq\":%" PRIu32 ",\"render_us\":%" PRIu32 ",\"decor_count\":%d,\"eyes\":[[%.3f,%.3f],[%.3f,%.3f]],\"clip\":%d,\"clip_frame\":%d,\"clip_hash\":%" PRIu32 ",\"shimmer_pixels\":%d,\"name_shimmer_pixels\":%d,\"text_gap\":%d,\"status_top\":%d,\"module\":\"%s\",\"page_index\":%u,\"page_count\":%u,\"refreshing\":%s,\"font_error\":%s,\"rotation\":%u,\"panel_transfers\":%u,\"panel_error\":%u,\"panel_rotation\":%u,\"rotation_us\":%u,\"rotation_pixels\":%u,\"theme\":\"%s\",\"dma_largest\":%u,\"internal_free\":%u,\"touch_reads\":%u,\"touch_errors\":%u,\"touch_revision\":%u}\n",
-        parsed->seq, drawn_seq, duration, decor_count, drawn[0].w, drawn[0].h, drawn[1].w, drawn[1].h, clip_id, clip_frame, clip_hash, shimmer_pixels, name_shimmer_pixels, text_gap, status_top, display_module_name(drawn_module), page_index, page_count, refreshing ? "true" : "false", font_error ? "true" : "false", rotation, screen_rotation_transfers(), screen_rotation_transfer_error(), screen_rotation_submitted_angle(), screen_rotation_render_us(), screen_rotation_render_pixels(), light_theme ? "light" : "dark", (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL), (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL), (unsigned)companion_board_touch_reads(), (unsigned)companion_board_touch_errors(), (unsigned)companion_board_touch_revision());
+        ",\"rendered_seq\":%" PRIu32 ",\"render_us\":%" PRIu32 ",\"eyes\":[[%.3f,%.3f],[%.3f,%.3f]],\"shimmer_pixels\":%d,\"name_shimmer_pixels\":%d,\"text_gap\":%d,\"status_top\":%d,\"module\":\"%s\",\"page_index\":%u,\"page_count\":%u,\"refreshing\":%s,\"font_error\":%s,\"rotation\":%u,\"panel_transfers\":%u,\"panel_error\":%u,\"panel_rotation\":%u,\"rotation_us\":%u,\"rotation_pixels\":%u,\"theme\":\"%s\",\"dma_largest\":%u,\"internal_free\":%u,\"touch_reads\":%u,\"touch_errors\":%u,\"touch_revision\":%u}\n",
+        parsed->seq, drawn_seq, duration, drawn[0].w, drawn[0].h, drawn[1].w, drawn[1].h, shimmer_pixels, name_shimmer_pixels, text_gap, status_top, display_module_name(drawn_module), page_index, page_count, refreshing ? "true" : "false", font_error ? "true" : "false", rotation, screen_rotation_transfers(), screen_rotation_transfer_error(), screen_rotation_submitted_angle(), screen_rotation_render_us(), screen_rotation_render_pixels(), light_theme ? "light" : "dark", (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL), (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL), (unsigned)companion_board_touch_reads(), (unsigned)companion_board_touch_errors(), (unsigned)companion_board_touch_revision());
     serial_write_line(ack);
 }
 
@@ -517,7 +506,7 @@ static bool host_timed_out(int64_t now)
 static void serial_task(void *argument)
 {
     (void)argument;
-    char line[FRAME_MAX + 1];
+    static char line[FRAME_MAX + 1];
     uint8_t input[128];
     size_t line_length = 0;
     bool discarding = false;
@@ -555,6 +544,15 @@ static void serial_task(void *argument)
             }
             else if (event == 7 || event == 8) serial_write_line(event == 7 ?
                 "{\"type\":\"roon-view\",\"v\":1,\"expanded\":true}\n" : "{\"type\":\"roon-view\",\"v\":1,\"expanded\":false}\n");
+            else if (event == 18) {
+                char line[160];
+                snprintf(line, sizeof(line), "{\"type\":\"speed-dial-run\",\"v\":1,\"id\":\"%s\",\"token\":\"%s\"}\n",
+                    message.speed_dial_id, message.speed_dial_token);
+                serial_write_line(line);
+            }
+            else if (event == 19 || event == -19) serial_write_line(event > 0 ?
+                "{\"type\":\"speed-dial-page\",\"v\":1,\"direction\":1}\n" :
+                "{\"type\":\"speed-dial-page\",\"v\":1,\"direction\":-1}\n");
             else if (event == 17) {
                 char line[128];
                 snprintf(line, sizeof(line), "{\"type\":\"audio-view\",\"v\":1,\"open\":true,\"scope\":\"%s\",\"deviceId\":%" PRIu32 "}\n",
@@ -678,7 +676,7 @@ static void refresh_face(lv_timer_t *timer)
     // Working uses the same status shimmer in live view and the playground.
     // The legacy status_dots field is parsed only for wire compatibility.
     bool face_visible = status.module.kind == DISPLAY_FACE;
-    bool shimmer_active = face_visible && state == FACE_WORKING && status.clip < 0;
+    bool shimmer_active = face_visible && state == FACE_WORKING;
     bool name_shimmer_active = name_shimmer_enabled(&status, disconnected);
     module_design_t design;
     if (face_visible) display_module_design(&status.module, &design);
@@ -740,13 +738,10 @@ static void refresh_face(lv_timer_t *timer)
     module_view_tick(animation_time);
 
     if (!face_visible) {
-        active_clip = -1;
         xSemaphoreTake(state_mutex, portMAX_DELAY);
         memset(rendered_eyes, 0, sizeof(rendered_eyes));
         rendered_seq = status.seq;
-        rendered_clip = rendered_clip_frame = -1;
-        rendered_clip_hash = 0;
-        rendered_decor_count = rendered_shimmer_pixels = rendered_name_shimmer_pixels = 0;
+        rendered_shimmer_pixels = rendered_name_shimmer_pixels = 0;
         rendered_text_gap = status.text_gap;
         rendered_status_top = status_top;
         rendered_module = status.module.kind;
@@ -768,34 +763,13 @@ static void refresh_face(lv_timer_t *timer)
     face_eye_t frame[2];
     int64_t start = esp_timer_get_time();
     face_motion_sample(&motion, animation_time, frame);
-    static face_accent_t accent;
-    int clip = disconnected ? -1 : status.clip;
-    bool clip_ok = false;
-    if (clip >= 0) {
-        if (clip != active_clip) {
-            const uint32_t offset = GROK_CLIPS[clip].offset, length = GROK_CLIPS[clip].length;
-            size_t total = (size_t)(grok_clips_end-grok_clips_start);
-            clip_ok = offset <= total && length <= total-offset && grok_player_open(&clip_player,grok_clips_start+offset,length,clip_pixels);
-            active_clip = clip_ok ? clip : -1;
-        } else clip_ok = true;
-        if (clip_ok) clip_ok = grok_player_sample(&clip_player,state_elapsed / 1000000.0,false);
-    } else active_clip = -1;
-    if (clip_ok) {
-        face_gaze_t gaze = face_motion_gaze(&motion,animation_time);
-        grok_blit_themed(clip_pixels,face_pixels,COMPANION_DISPLAY_WIDTH,COMPANION_DISPLAY_HEIGHT,gaze.x*gaze.mix,gaze.y*gaze.mix,layout->scale,status.module.palette.background,status.module.palette.foreground);
-        accent.count = 0;
-    } else {
-        face_accent_sample(asleep ? FACE_SLEEP : pose, state_elapsed / 1000000.0, &accent);
-        face_accent_eyes(&accent, frame); // keeps the gentle thinking pose
-        uint32_t eye_color = face_motion_color(&motion);
-        if (pose == FACE_IDLE || pose == FACE_SLEEP || pose == FACE_UNKNOWN) eye_color = status.module.palette.foreground;
-        else if (pose == FACE_DISCONNECTED) eye_color = status.module.palette.muted;
-        else if (pose == FACE_WORKING && status.module.palette.accent != 0x65c18c) eye_color = status.module.palette.accent;
-        else if (pose == FACE_DONE && status.module.palette.success != 0x65c18c) eye_color = status.module.palette.success;
-        else if (pose == FACE_BLOCKED && status.module.palette.warning != 0xd9be81) eye_color = status.module.palette.warning;
-        face_rasterize_themed(face_pixels, COMPANION_DISPLAY_WIDTH, COMPANION_DISPLAY_HEIGHT, frame, eye_color, layout->scale, status.module.palette.background);
-        face_draw_decor_scaled(face_pixels, COMPANION_DISPLAY_WIDTH, COMPANION_DISPLAY_HEIGHT, accent.decor, accent.count, layout->scale);
-    }
+    uint32_t eye_color = face_motion_color(&motion);
+    if (pose == FACE_IDLE || pose == FACE_SLEEP || pose == FACE_UNKNOWN) eye_color = status.module.palette.foreground;
+    else if (pose == FACE_DISCONNECTED) eye_color = status.module.palette.muted;
+    else if (pose == FACE_WORKING && status.module.palette.accent != 0x65c18c) eye_color = status.module.palette.accent;
+    else if (pose == FACE_DONE && status.module.palette.success != 0x65c18c) eye_color = status.module.palette.success;
+    else if (pose == FACE_BLOCKED && status.module.palette.warning != 0xd9be81) eye_color = status.module.palette.warning;
+    face_rasterize_themed(face_pixels, COMPANION_DISPLAY_WIDTH, COMPANION_DISPLAY_HEIGHT, frame, eye_color, layout->scale, status.module.palette.background);
     int shimmer_pixels = 0;
     if (shimmer_active) {
         uint32_t base = status.module.palette.muted;
@@ -821,10 +795,6 @@ static void refresh_face(lv_timer_t *timer)
     rendered_font_error = design_fonts_have_error();
     rendered_rotation = screen_rotation_current();
         rendered_light_theme = status.module.light_theme;
-    rendered_clip = clip_ok ? clip : -1;
-    rendered_clip_frame = clip_ok ? clip_player.index : -1;
-    rendered_clip_hash = clip_ok ? clip_player.hash : 0;
-    rendered_decor_count = accent.count;
     rendered_shimmer_pixels = shimmer_pixels;
     rendered_name_shimmer_pixels = name_shimmer_pixels;
     rendered_text_gap = status.text_gap;
@@ -838,6 +808,7 @@ static void touch_event(lv_event_t *event)
 {
     static module_touch_t touch;
     static module_card_target_t pressed_card;
+    static speed_dial_target_t pressed_speed_dial;
     static uint32_t pressed_rotation_revision, pressed_touch_revision;
     static EXT_RAM_BSS_ATTR attention_snapshot_t pressed_attention;
     static int pressed_x, pressed_y;
@@ -859,6 +830,7 @@ static void touch_event(lv_event_t *event)
     int64_t sample_time = companion_board_touch_sample_time_us();
     uint32_t touch_revision = companion_board_touch_revision();
     if (!companion_board_touch_sample_valid()) {
+        module_view_speed_dial_cancel();
         touch.active = false;
         attention_gesture_cancel(&attention_gesture);
         return;
@@ -878,10 +850,18 @@ static void touch_event(lv_event_t *event)
         pressed_audio_target = audio_row >= 0 ? status.module.audio_devices[audio_row].id : 0;
         pressed_card = (module_card_target_t){0};
         module_view_card_at(point.x, point.y, &pressed_card);
+        pressed_speed_dial = (speed_dial_target_t){0};
+        if (!pressed_attention.active && status.ever_received && esp_timer_get_time() - status.last_valid_us < DISCONNECT_US)
+            module_view_speed_dial_press(point.x, point.y, &pressed_speed_dial);
     }
-    else if (code == LV_EVENT_PRESSING) module_touch_move(&touch, point.x, point.y);
-    else if (code == LV_EVENT_PRESS_LOST) { touch.active = false; attention_gesture_cancel(&attention_gesture); }
+    else if (code == LV_EVENT_PRESSING) {
+        module_touch_move(&touch, point.x, point.y);
+        if (touch.max_x > 16 || touch.max_y > 16) module_view_speed_dial_cancel();
+    }
+    else if (code == LV_EVENT_PRESS_LOST) { module_view_speed_dial_cancel(); touch.active = false; attention_gesture_cancel(&attention_gesture); }
     else if (code == LV_EVENT_RELEASED) {
+        bool dial_press_valid = module_view_speed_dial_press_valid(point.x, point.y, &pressed_speed_dial);
+        module_view_speed_dial_cancel();
         if (pressed_rotation_revision != display_rotation_revision || pressed_touch_revision != touch_revision) { touch.active = false; attention_gesture_cancel(&attention_gesture); return; }
         module_touch_action_t action = module_touch_end(&touch, point.x, point.y, sample_time);
         status_copy(&status);
@@ -906,6 +886,15 @@ static void touch_event(lv_event_t *event)
             attention_touch_revision = touch_revision;
             if (attention_gesture_tap(&attention_gesture, shown_attention, display_rotation_revision,
                 point.x, point.y, sample_time, hit)) queue_attention(shown_attention, "__dismiss");
+            return;
+        }
+        if (action == MODULE_TOUCH_TAP && pressed_speed_dial.token[0]) {
+            if (!dial_press_valid || !status.ever_received || esp_timer_get_time() - status.last_valid_us >= DISCONNECT_US ||
+                !speed_dial_target_valid(&status.module, point.x, point.y, &pressed_speed_dial)) return;
+            touch_message_t run = {.action = 18};
+            memcpy(run.speed_dial_id, pressed_speed_dial.id, sizeof(run.speed_dial_id));
+            memcpy(run.speed_dial_token, pressed_speed_dial.token, sizeof(run.speed_dial_token));
+            xQueueSend(cycle_queue, &run, 0);
             return;
         }
         if (action == MODULE_TOUCH_TAP && pressed_card.token[0]) {
@@ -961,6 +950,8 @@ static void touch_event(lv_event_t *event)
                 .audio_volume = fminf(100, fmaxf(0, status.module.audio_volume + (button == 1 ? -5 : 5))), .audio_muted = !status.module.audio_muted};
             xQueueSend(cycle_queue, &control, 0); return;
         }
+        else if (action == MODULE_TOUCH_PAGE_NEXT && status.module.kind == DISPLAY_SPEED_DIAL && status.module.page_count > 1) message = 19;
+        else if (action == MODULE_TOUCH_PAGE_PREVIOUS && status.module.kind == DISPLAY_SPEED_DIAL && status.module.page_count > 1) message = -19;
         else if (action == MODULE_TOUCH_PAGE_NEXT && status.module.kind == DISPLAY_AUDIO && status.module.page_count > 1) message = 13;
         else if (action == MODULE_TOUCH_PAGE_PREVIOUS && status.module.kind == DISPLAY_AUDIO && status.module.page_count > 1) message = -13;
         else if (action == MODULE_TOUCH_NEXT && status.module.count > 1) message = 1;
@@ -989,8 +980,6 @@ static void make_ui(void)
 
     face_pixels = heap_caps_malloc(COMPANION_DISPLAY_WIDTH * COMPANION_DISPLAY_HEIGHT * sizeof(uint16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     assert(face_pixels != NULL);
-    clip_pixels = heap_caps_malloc(GROK_PIXELS * sizeof(uint16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    assert(clip_pixels != NULL);
     memset(face_pixels, 0, COMPANION_DISPLAY_WIDTH * COMPANION_DISPLAY_HEIGHT * sizeof(uint16_t));
     face_canvas = lv_canvas_create(screen);
     lv_canvas_set_buffer(face_canvas, face_pixels, COMPANION_DISPLAY_WIDTH, COMPANION_DISPLAY_HEIGHT, LV_COLOR_FORMAT_RGB565);

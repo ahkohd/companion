@@ -6,6 +6,5 @@
     "allowImportingTsExtensions": true, "baseUrl": ".", "paths": { "@/*": ["./web/*"] },
     "lib": ["ES2022", "DOM", "DOM.Iterable"], "types": ["vite/client", "node"]
   },
-  "include": ["web/**/*.ts", "web/components/**/*.tsx", "web/App.tsx", "vite.config.ts"],
-  "exclude": ["web/vendor/grok-bot/upstream-renderer.tsx"]
+  "include": ["web/**/*.ts", "web/components/**/*.tsx", "web/App.tsx", "vite.config.ts"]
 }

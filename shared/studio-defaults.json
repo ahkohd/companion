@@ -19,7 +19,8 @@
       "face",
       "usage",
       "roon",
-      "audio"
+      "audio",
+      "speedDial"
     ],
     "rotation": 0
   },
@@ -57,6 +58,14 @@
     },
     "audio": {
       "enabled": false
+    },
+    "speedDial": {
+      "enabled": false,
+      "layout": "grid",
+      "gridSize": 0,
+      "listRows": 3,
+      "showLabels": true,
+      "buttons": []
     }
   },
   "mappings": {
@@ -165,6 +174,16 @@
       "controlsY": 358,
       "controlSize": 64,
       "gap": 12,
+      "textColor": 15920634,
+      "mutedColor": 9800868
+    },
+    "speedDial": {
+      "buttonSize": 96,
+      "iconSize": 48,
+      "labelSize": 18,
+      "gap": 16,
+      "offsetY": 0,
+      "rowHeight": 76,
       "textColor": 15920634,
       "mutedColor": 9800868
     }

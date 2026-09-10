@@ -2,7 +2,6 @@
 import { readFile, realpath } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { Installations } from '../bridge/installations.mjs';
-import catalog from '../shared/grok-catalog.json' with { type: 'json' };
 
 export async function run(args, { out = value => console.log(JSON.stringify(value)), fetcher = fetch, installations = new Installations() } = {}) {
   const [command = 'help', ...rest] = args;
@@ -39,7 +38,7 @@ export async function run(args, { out = value => console.log(JSON.stringify(valu
     if (!['--json', '--id', '--owner', '--timeout'].includes(rest[i]) || !rest[i + 1] || rest[i + 1].startsWith('--')) throw new Error(`Invalid option: ${rest[i]}`);
     options[rest[i].slice(2)] = rest[i + 1];
   }
-  if (command === 'animations') { out([...['working', 'blocked', 'done', 'idle', 'sleep', 'unknown'].map(id => ({ id })), ...catalog]); return 0; }
+  if (command === 'animations') { out(['working', 'blocked', 'done', 'idle', 'sleep', 'unknown'].map(id => ({ id }))); return 0; }
   if (!['show', 'update', 'clear', 'status', 'wait'].includes(command)) throw new Error(`Unknown command: ${command}`);
   const base = new URL(process.env.COMPANION_URL || 'http://127.0.0.1:4317');
   if (base.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(base.hostname) || base.username || base.password) throw new Error('COMPANION_URL must be a local HTTP address.');

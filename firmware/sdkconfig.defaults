@@ -16,7 +16,7 @@ CONFIG_SPIRAM=y
 CONFIG_SPIRAM_MODE_OCT=y
 CONFIG_SPIRAM_SPEED_80M=y
 CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
-# Keep the animation collection in flash; it is larger than the PSRAM.
+# Keep read-only assets in flash to leave PSRAM for display buffers.
 # CONFIG_SPIRAM_RODATA is not set
 # CONFIG_SPIRAM_XIP_FROM_PSRAM is not set
 CONFIG_ESP32S3_INSTRUCTION_CACHE_32KB=y
