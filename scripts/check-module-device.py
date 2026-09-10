@@ -9,11 +9,18 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('port')
 args = parser.parse_args()
 with serial.Serial(args.port, 115200, timeout=0.15, write_timeout=2) as device:
+    incoming = bytearray()
+
     def receive(predicate, timeout=3):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
+            incoming.extend(device.readline())
+            if not incoming.endswith(b'\n'):
+                continue
+            line = bytes(incoming)
+            incoming.clear()
             try:
-                item = json.loads(device.readline())
+                item = json.loads(line)
             except (ValueError, UnicodeDecodeError):
                 continue
             if isinstance(item, dict) and predicate(item):
@@ -21,6 +28,7 @@ with serial.Serial(args.port, 115200, timeout=0.15, write_timeout=2) as device:
         raise AssertionError('Expected device response was not received')
 
     receive(lambda item: item.get('type') == 'ready', 12)
+    device.write(b'\n')  # Discard any partial frame left when the bridge stopped.
     seq = 910000
     base = dict(type='state', v=1, state='working', label='Module check', name='Playground',
                 counts=dict(working=1, blocked=0, done=0, idle=0, unknown=0), textGap=8)
@@ -34,9 +42,24 @@ with serial.Serial(args.port, 115200, timeout=0.15, write_timeout=2) as device:
         device.write(wire)
         receive(lambda item: item.get('type') == 'ack' and item.get('seq') == seq)
         time.sleep(0.7)
-        device.write(wire)
-        result = receive(lambda item: item.get('type') == 'ack' and item.get('seq') == seq)
-        assert result.get('rendered_seq') == seq, result
+        started = time.monotonic()
+        deadline = started + 3
+        result = None
+        attempts = 0
+        while time.monotonic() < deadline:
+            device.write(wire)
+            attempts += 1
+            try:
+                result = receive(lambda item: item.get('type') == 'ack' and item.get('seq') == seq,
+                                 max(0, deadline - time.monotonic()))
+            except AssertionError as error:
+                raise AssertionError(f'Frame {seq} was not rendered: {result}') from error
+            if result.get('rendered_seq') == seq:
+                if attempts > 1:
+                    print(f'NOTE: frame {seq} needed {attempts} render checks ({time.monotonic() - started:.3f}s)', flush=True)
+                break
+            time.sleep(0.03)
+        assert result and result.get('rendered_seq') == seq, result
         assert result.get('text_gap') == 8 and result.get('status_top') == 360, result
         return result
 
@@ -145,16 +168,16 @@ with serial.Serial(args.port, 115200, timeout=0.15, write_timeout=2) as device:
                    for refreshing in [None, 'true', 1, 0, [], {}])
     invalid.extend(dict(module='usage', showCardBackgrounds=backgrounds)
                    for backgrounds in [None, 'true', 1, 0, [], {}])
-    seq += 1
     for extra in invalid:
-        device.write((json.dumps(dict(base, seq=seq, **extra)) + '\n').encode())
-    deadline = time.monotonic() + 1
-    while time.monotonic() < deadline:
-        try:
-            message = json.loads(device.readline())
-        except (ValueError, UnicodeDecodeError):
-            continue
-        assert not isinstance(message, dict) or message.get('type') != 'ack', message
+        seq += 2
+        rejected = (json.dumps(dict(base, seq=seq - 1, **extra)) + '\n').encode()
+        barrier = (json.dumps(dict(base, seq=seq)) + '\n').encode()
+        # A valid frame's ACK paces the test within the 4096-byte receive buffer.
+        assert len(rejected) + len(barrier) <= 4096
+        device.write(rejected)
+        device.write(barrier)
+        message = receive(lambda item: item.get('type') == 'ack')
+        assert message.get('seq') == seq, message
     drawn = render()
     assert drawn.get('module') == 'face' and drawn.get('shimmer_pixels', 0) > 100, drawn
     assert drawn.get('page_index') == 0 and drawn.get('page_count') == 1, drawn

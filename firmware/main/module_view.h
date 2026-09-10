@@ -14,6 +14,7 @@ bool module_view_speed_dial_press(int x, int y, speed_dial_target_t *target);
 bool module_view_speed_dial_press_valid(int x, int y, const speed_dial_target_t *target);
 void module_view_speed_dial_cancel(void);
 bool module_view_audio_open_hit(int x, int y);
+bool module_view_roon_badge_hit(int x, int y, music_player_t player);
 bool module_view_roon_like_hit(int x, int y);
 bool module_view_roon_art_hit(int x, int y);
 bool module_view_roon_controls_ready(void);

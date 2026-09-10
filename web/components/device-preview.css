@@ -93,7 +93,10 @@
 .device-preview .dp-hardware[data-shape="rectangular"]::before { border-radius:12px; }
 .device-preview .dp-display[data-shape="rectangular"] { border-radius:4px; }
 .device-preview .dp-display[data-shape="rectangular"] .device-screen::after { border-radius:0; }
-.device-preview .dp-player-badge {display:flex;align-items:center;justify-content:center;width:30px;height:30px;color:white;}
+.device-preview .dp-player-badge {display:flex;align-items:center;justify-content:center;width:44px;height:44px;color:white;border:0;border-radius:50%;padding:0;background:transparent;cursor:pointer;pointer-events:auto;}
+.device-preview .dp-player-badge:active:not(:disabled) {opacity:.6;}
+.device-preview .dp-player-badge:disabled {opacity:.5;cursor:default;pointer-events:none;}
+.device-preview .dp-player-badge:focus-visible {outline:2px solid white;outline-offset:-5px;}
 .device-preview .dp-player-like {display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:0;color:white;cursor:pointer;padding:0;pointer-events:auto;}
 .device-preview .dp-player-like[aria-pressed="true"] {color:#1ed760;}
 .device-preview .dp-player-like:disabled {opacity:.5;cursor:default;}

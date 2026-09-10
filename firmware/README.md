@@ -234,6 +234,8 @@ The optional boolean `nameShimmer` animates the Face session subtitle in Geist S
 
 ### Now Playing sources
 
-The `roon` module also displays Spotify and macOS Now Playing using the same artwork and controls. Optional dashboard `player` values are `roon`, `spotify` and `system`; older frames default to `roon`. Optional boolean `canLike` and `liked` fields control the heart action and its saved state. The source badge sits at the artwork's top left (System has no badge), and the heart sits at its bottom right. Expanded artwork hides both overlays.
+The `roon` module also displays Spotify, Apple Music and macOS Now Playing using the same artwork and controls. Optional dashboard `player` values are `roon`, `spotify`, `appleMusic` and `system`; older frames default to `roon`. Optional boolean `canLike` and `liked` fields control the heart action and its saved state. The source badge sits at the artwork's top left (System has no badge), and the heart sits at its bottom right. Expanded artwork hides both overlays.
 
 When `pageCount` is greater than one, vertical swipes send `{"type":"roon-player","v":1,"direction":1}` or direction `-1`, even when a source is unavailable. Horizontal swipes still select modules. Tapping a supported heart sends `{"type":"roon-control","v":1,"action":"like","player":"spotify"}`. Playback controls include the player captured on touch. The bridge rejects controls queued for a different source and performs supported actions.
+
+Tapping a badge sends `{"type":"roon-control","v":1,"action":"open","player":"spotify"}` with the player captured on touch. The bridge opens that app without sending a playback command.

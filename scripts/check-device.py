@@ -11,10 +11,16 @@ parser.add_argument('port')
 args = parser.parse_args()
 
 with serial.Serial(args.port, 115200, timeout=0.15, write_timeout=2) as device:
+    incoming = bytearray()
+
     def receive_until(predicate, timeout):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            line = device.readline()
+            incoming.extend(device.readline())
+            if not incoming.endswith(b'\n'):
+                continue
+            line = bytes(incoming)
+            incoming.clear()
             try:
                 message = json.loads(line)
             except (ValueError, UnicodeDecodeError):
@@ -23,8 +29,29 @@ with serial.Serial(args.port, 115200, timeout=0.15, write_timeout=2) as device:
                 return message
         raise AssertionError('Expected device response was not received')
 
+    def rendered_ack(payload):
+        drawn = None
+        started = time.monotonic()
+        deadline = started + 3
+        attempts = 0
+        while time.monotonic() < deadline:
+            device.write((json.dumps(payload) + '\n').encode())
+            attempts += 1
+            try:
+                drawn = receive_until(lambda m: m.get('type') == 'ack' and m.get('seq') == payload['seq'],
+                                      max(0, deadline - time.monotonic()))
+            except AssertionError as error:
+                raise AssertionError(f"Frame {payload['seq']} was not rendered: {drawn}") from error
+            if drawn.get('rendered_seq') == payload['seq']:
+                if attempts > 1:
+                    print(f"NOTE: frame {payload['seq']} needed {attempts} render checks ({time.monotonic() - started:.3f}s)", flush=True)
+                return drawn
+            time.sleep(0.03)
+        raise AssertionError(f"Frame {payload['seq']} was not rendered: {drawn}")
+
     ready = lambda m: m.get('type') == 'ready' and m.get('v') == 1 and m.get('board') == 'waveshare-1.75-b'
     receive_until(ready, 12)
+    device.write(b'\n')  # Discard any partial frame left when the bridge stopped.
     print('PASS: firmware identifies the board and protocol', flush=True)
 
     counts = dict(working=1, blocked=0, done=0, idle=0, unknown=0)
@@ -37,8 +64,7 @@ with serial.Serial(args.port, 115200, timeout=0.15, write_timeout=2) as device:
         device.write((json.dumps(payload) + '\n').encode())
         receive_until(lambda m: m.get('type') == 'ack' and m.get('seq') == seq, 3)
         time.sleep(0.65)
-        device.write((json.dumps(payload) + '\n').encode())
-        drawn = receive_until(lambda m: m.get('type') == 'ack' and m.get('seq') == seq, 3)
+        drawn = rendered_ack(payload)
         assert drawn.get('rendered_seq') == seq, drawn
         assert drawn.get('shimmer_pixels', 0) > 100 if state == 'working' else drawn.get('shimmer_pixels') == 0, drawn
         assert drawn.get('text_gap') == 8 and drawn.get('status_top') == 360, drawn
@@ -54,8 +80,7 @@ with serial.Serial(args.port, 115200, timeout=0.15, write_timeout=2) as device:
         device.write((json.dumps(payload) + '\n').encode())
         receive_until(lambda m: m.get('type') == 'ack' and m.get('seq') == seq, 3)
         time.sleep(0.1)
-        device.write((json.dumps(payload) + '\n').encode())
-        drawn = receive_until(lambda m: m.get('type') == 'ack' and m.get('seq') == seq, 3)
+        drawn = rendered_ack(payload)
         assert drawn.get('rendered_seq') == seq, drawn
         assert 'decor_count' not in drawn and 'clip' not in drawn, drawn
         assert drawn['render_us'] < 33000, drawn
@@ -68,8 +93,7 @@ with serial.Serial(args.port, 115200, timeout=0.15, write_timeout=2) as device:
         device.write((json.dumps(payload) + '\n').encode())
         receive_until(lambda m: m.get('type') == 'ack' and m.get('seq') == seq, 3)
         time.sleep(0.1)
-        device.write((json.dumps(payload) + '\n').encode())
-        drawn = receive_until(lambda m: m.get('type') == 'ack' and m.get('seq') == seq, 3)
+        drawn = rendered_ack(payload)
         assert drawn.get('rendered_seq') == seq, drawn
         assert 100 < drawn.get('shimmer_pixels', 0) < 16384, drawn
         assert drawn['render_us'] < 33000, drawn
@@ -85,8 +109,7 @@ with serial.Serial(args.port, 115200, timeout=0.15, write_timeout=2) as device:
         device.write((json.dumps(payload) + '\n').encode())
         receive_until(lambda m: m.get('type') == 'ack' and m.get('seq') == seq, 3)
         time.sleep(0.1)
-        device.write((json.dumps(payload) + '\n').encode())
-        drawn = receive_until(lambda m: m.get('type') == 'ack' and m.get('seq') == seq, 3)
+        drawn = rendered_ack(payload)
         assert drawn.get('rendered_seq') == seq, drawn
         if state == 'working':
             assert 100 < drawn.get('shimmer_pixels', 0) < 16384, drawn
@@ -105,8 +128,7 @@ with serial.Serial(args.port, 115200, timeout=0.15, write_timeout=2) as device:
             device.write((json.dumps(payload) + '\n').encode())
             receive_until(lambda m: m.get('type') == 'ack' and m.get('seq') == seq, 3)
             time.sleep(0.1)
-            device.write((json.dumps(payload) + '\n').encode())
-            drawn = receive_until(lambda m: m.get('type') == 'ack' and m.get('seq') == seq, 3)
+            drawn = rendered_ack(payload)
             assert drawn.get('rendered_seq') == seq, drawn
             assert drawn.get('text_gap') == gap and drawn.get('status_top') == tops[gap], (gap, drawn)
             if state == 'working':
@@ -121,8 +143,7 @@ with serial.Serial(args.port, 115200, timeout=0.15, write_timeout=2) as device:
     device.write((json.dumps(payload) + '\n').encode())
     receive_until(lambda m: m.get('type') == 'ack' and m.get('seq') == seq, 3)
     time.sleep(0.1)
-    device.write((json.dumps(payload) + '\n').encode())
-    drawn = receive_until(lambda m: m.get('type') == 'ack' and m.get('seq') == seq, 3)
+    drawn = rendered_ack(payload)
     assert drawn.get('text_gap') == 8 and drawn.get('status_top') == 360 and drawn.get('shimmer_pixels') == 0, drawn
     print('PASS: text gap 4, 8 and 16 position status text for live shimmer and static Ready; omitted gap restores 8', flush=True)
     payload['preview'] = True

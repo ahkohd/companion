@@ -15,7 +15,7 @@ class Source extends EventEmitter {
   async artwork() { return null; }
   async control(action) { this.lastAction = action; }
 }
-const fixture = () => { const sources = { roon: new Source(), spotify: new Source(), appleMusic: new Source(), system: new Source() }; return { sources, music: new NowPlayingSource({ sources }) }; };
+const fixture = (options = {}) => { const sources = { roon: new Source(), spotify: new Source(), appleMusic: new Source(), system: new Source() }; return { sources, music: new NowPlayingSource({ sources, ...options }) }; };
 
 test('players enable independently, vertical selection skips disabled sources and does not control playback', async () => {
   const { sources, music } = fixture();
@@ -32,6 +32,37 @@ test('players enable independently, vertical selection skips disabled sources an
   music.configure({ enabled: true, players: { roon: true, spotify: false, system: false } });
   assert.equal(music.player, 'roon');
   assert.throws(() => music.select({ id: 'spotify' }), /Enable/);
+});
+
+test('player badges open only the named app without playback and reject stale or invalid requests', async () => {
+  const calls = [];
+  let code = 0;
+  const { music, sources } = fixture({ platform: 'darwin', runner: async (...args) => { calls.push(args); return { code }; } });
+  const players = { roon: true, spotify: true, appleMusic: true, system: true };
+  music.configure({ enabled: true, players });
+  for (const [player, bundle] of [['roon', 'com.roon.Roon'], ['spotify', 'com.spotify.client'], ['appleMusic', 'com.apple.Music']]) {
+    music.select({ id: player });
+    await music.control('open', player);
+    assert.deepEqual(calls.at(-1), ['/usr/bin/open', ['-b', bundle], { timeoutMs: 10000, maxOutputBytes: 4096 }]);
+  }
+  assert.ok(Object.values(sources).every(source => source.lastAction === undefined));
+  for (const player of [undefined, null, 'system', 'constructor', '__proto__', 'com.apple.Terminal', ['appleMusic'], {}]) {
+    await assert.rejects(music.control('open', player));
+  }
+  await assert.rejects(music.control('open', 'roon'), /changed/);
+  music.configure({ enabled: true, players: { ...players, appleMusic: false } });
+  await assert.rejects(music.control('open', 'appleMusic'), /changed/);
+  music.configure({ enabled: false, players });
+  await assert.rejects(music.control('open', 'roon'), /changed/);
+  music.configure({ enabled: true, players });
+  music.platform = 'linux';
+  await assert.rejects(music.control('open', 'roon'), /macOS/);
+  assert.equal(calls.length, 3);
+  music.platform = 'darwin'; code = 1;
+  await assert.rejects(music.control('open', 'roon'), /Could not open Roon/);
+  music.runner = async () => { throw Error('ETIMEDOUT'); };
+  await assert.rejects(music.control('open', 'roon'), /ETIMEDOUT/);
+  assert.ok(Object.values(sources).every(source => source.lastAction === undefined));
 });
 
 test('player settings validate and frames stay below the 2048 byte serial limit', () => {

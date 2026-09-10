@@ -158,3 +158,16 @@ test('device Roon controls require an enabled active module and validated action
   await turn(); assert.deepEqual(actions, ['previous', 'next', 'playpause']);
   store.setModule('face'); control('next'); await turn(); assert.equal(actions.length, 3);
 });
+
+test('device app badges require an explicit supported player and never send playback or view actions', async t => {
+  const { link, store } = setup(t), actions = [];
+  link.onRoonControl = (action, player) => actions.push({ action, player });
+  link.onRoonView = () => assert.fail('Badge must not expand artwork');
+  const open = player => link.receive(JSON.stringify({ type: 'roon-control', v: 1, action: 'open', player }) + '\n');
+  open('roon'); link.receive(ready); open('roon'); await turn(); assert.deepEqual(actions, []);
+  store.setSettings(mergeSettings(store.settings, { modules: { roon: { enabled: true } }, device: { activeModule: 'roon' } }));
+  for (const player of ['roon', 'spotify', 'appleMusic', undefined, null, 'system', 'constructor', 'com.apple.Terminal', ['roon']]) open(player);
+  await turn(); assert.deepEqual(actions, ['roon', 'spotify', 'appleMusic'].map(player => ({ action: 'open', player })));
+  store.attention = { active: { id: 'overlay' } }; open('roon'); await turn(); assert.equal(actions.length, 3);
+  store.attention = null; store.setModule('face'); open('roon'); await turn(); assert.equal(actions.length, 3);
+});

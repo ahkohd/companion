@@ -504,6 +504,15 @@ static void apply_roon_pose(roon_pose_t pose)
     if (opacity_changed) for (unsigned i = 0; i < 3; ++i) lv_obj_invalidate(roon_controls[i]);
 }
 
+bool module_view_roon_badge_hit(int x, int y, music_player_t player)
+{
+    if (!roon_render_active || music_player == MUSIC_SYSTEM || music_player != player ||
+        roon_motion.expanded || !roon_motion_settled(&roon_motion)) return false;
+    int left = lv_obj_get_x(roon_art) + lv_obj_get_x(music_source_badge);
+    int top = lv_obj_get_y(roon_art) + lv_obj_get_y(music_source_badge);
+    return x >= left - 7 && x < left + 37 && y >= top - 7 && y < top + 37;
+}
+
 bool module_view_roon_like_hit(int x, int y)
 {
     if (!roon_render_active || !music_can_like || roon_motion.expanded || !roon_motion_settled(&roon_motion)) return false;

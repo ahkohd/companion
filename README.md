@@ -28,7 +28,7 @@ The app detects installed CodexBar and HEY CLIs. Herdr Face, CodexBar, HEY and C
 
 Enable the modules you want on the Modules page. Swipe left or right to switch between them. You can change their order.
 
-Now Playing shares one design across four players. Enable Roon, Spotify, Apple Music and macOS Now Playing separately, then swipe up or down to switch between them. Switching the display does not change playback. Spotify, Apple Music and Roon have an app icon at the top-left of the artwork; the system player has no badge.
+Now Playing shares one design across four players. Enable Roon, Spotify, Apple Music and macOS Now Playing separately, then swipe up or down to switch between them. Switching the display does not change playback. Tap the app icon at the top-left of the artwork to open Spotify, Apple Music or Roon on your Mac. The system player has no badge.
 
 Spotify and Apple Music use their installed Mac apps. Apple Music starts disabled and controls Music independently of the active system player. Allow Companion access in System Settings > Privacy and Security > Automation when prompted. No developer account is required. macOS Now Playing follows the active Mac media app, which can be the same track shown by Spotify or Roon. Its bundled adapter uses private macOS APIs, so compatibility can change with system updates. Roon still uses its local server extension and selected listening zone.
 

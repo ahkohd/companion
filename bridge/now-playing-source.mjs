@@ -1,10 +1,12 @@
 import { EventEmitter } from 'node:events';
 import { RoonSource } from './roon-source.mjs';
 import { LocalMusicSource } from './local-music-source.mjs';
+import { runModuleCommand } from './module-sources.mjs';
+const apps = { roon: 'com.roon.Roon', spotify: 'com.spotify.client', appleMusic: 'com.apple.Music' };
 const names = { roon: 'Roon', spotify: 'Spotify', appleMusic: 'Apple Music', system: 'System' };
 export class NowPlayingSource extends EventEmitter {
-  constructor({ pairingPath, sources } = {}) {
-    super(); this.sources = sources || { roon: new RoonSource({ pairingPath }), spotify: new LocalMusicSource({ player: 'spotify' }), appleMusic: new LocalMusicSource({ player: 'appleMusic' }), system: new LocalMusicSource({ player: 'system' }) };
+  constructor({ pairingPath, sources, runner = runModuleCommand, platform = process.platform } = {}) {
+    super(); this.runner = runner; this.platform = platform; this.sources = sources || { roon: new RoonSource({ pairingPath }), spotify: new LocalMusicSource({ player: 'spotify' }), appleMusic: new LocalMusicSource({ player: 'appleMusic' }), system: new LocalMusicSource({ player: 'system' }) };
     this.config = { enabled: false, players: { roon: true, spotify: false, appleMusic: false, system: false } }; this.player = 'roon'; this.started = false;
     for (const source of Object.values(this.sources)) source.on('change', () => this.publish());
   }
@@ -39,8 +41,16 @@ export class NowPlayingSource extends EventEmitter {
     for (const source of Object.values(this.sources)) { const art = await source.artwork(id); if (art) return art; }
     return null;
   }
-  async control(action, player = this.player) {
+  async control(action, player) {
+    if (action === 'open' && !Object.hasOwn(apps, player)) throw Error('Choose a player app to open.');
+    if (player === undefined) player = this.player;
     if (!this.config.enabled || !this.config.players[player] || player !== this.player) throw Error('The selected player changed. Try again.');
+    if (action === 'open') {
+      if (this.platform !== 'darwin') throw Error('Opening player apps requires macOS.');
+      const result = await this.runner('/usr/bin/open', ['-b', apps[player]], { timeoutMs: 10000, maxOutputBytes: 4096 });
+      if (result.code !== 0) throw Error(`Could not open ${names[player]}. Check that it is installed.`);
+      return;
+    }
     return this.sources[player].control(action);
   }
 }

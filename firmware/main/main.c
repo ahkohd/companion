@@ -535,8 +535,8 @@ static void serial_task(void *argument)
                     display_module_name(message.card.module), message.card.index, message.card.token);
                 serial_write_line(line);
             }
-            else if ((event >= 4 && event <= 6) || event == 11) {
-                const char *action = event == 4 ? "previous" : event == 5 ? "playpause" : event == 6 ? "next" : "like";
+            else if ((event >= 4 && event <= 6) || event == 11 || event == 20) {
+                const char *action = event == 4 ? "previous" : event == 5 ? "playpause" : event == 6 ? "next" : event == 20 ? "open" : "like";
                 const char *player = message.player == MUSIC_SPOTIFY ? "spotify" : message.player == MUSIC_SYSTEM ? "system" : message.player == MUSIC_APPLE_MUSIC ? "appleMusic" : "roon";
                 char line[96];
                 snprintf(line, sizeof(line), "{\"type\":\"roon-control\",\"v\":1,\"action\":\"%s\",\"player\":\"%s\"}\n", action, player);
@@ -814,6 +814,7 @@ static void touch_event(lv_event_t *event)
     static int pressed_x, pressed_y;
     static display_module_t pressed_module;
     static music_player_t pressed_player;
+    static bool pressed_player_badge;
     static bool pressed_audio_input, pressed_audio_picker;
     static uint16_t pressed_audio_page;
     static uint32_t pressed_audio_target;
@@ -844,6 +845,7 @@ static void touch_event(lv_event_t *event)
         pressed_x = point.x; pressed_y = point.y;
         status_copy(&status);
         pressed_module = status.module.kind; pressed_player = status.module.player;
+        pressed_player_badge = module_view_roon_badge_hit(point.x, point.y, pressed_player);
         pressed_audio_input = status.module.audio_input; pressed_audio_device = status.module.audio_device_id;
         pressed_audio_picker = status.module.audio_picker_open; pressed_audio_page = status.module.page_index;
         int audio_row = module_touch_audio_row(point.x, point.y, status.module.audio_row_count);
@@ -914,7 +916,12 @@ static void touch_event(lv_event_t *event)
             if (pressed_module != DISPLAY_ROON || pressed_player != status.module.player) return;
             module_design_t design;
             display_module_design(&status.module, &design);
-            if (status.module.can_like && module_view_roon_like_hit(point.x, point.y) &&
+            bool badge_hit = module_view_roon_badge_hit(point.x, point.y, pressed_player);
+            if (pressed_player_badge || badge_hit) {
+                if (!pressed_player_badge || !badge_hit) return;
+                message = 20;
+            }
+            else if (status.module.can_like && module_view_roon_like_hit(point.x, point.y) &&
                 module_view_roon_like_hit(pressed_x, pressed_y)) message = 11;
             else if ((status.module.expanded || status.module.art_id[0]) && module_view_roon_art_hit(point.x, point.y)) {
                 message = status.module.expanded ? 8 : 7;

@@ -162,7 +162,8 @@ export class DeviceLink {
         Promise.resolve().then(() => this.onRoonView ? this.onRoonView(message.expanded) : this.store.setRoonExpanded(message.expanded))
           .catch(() => this.store.setDevice({ error: 'Could not change the artwork view. Try again in the playground.' }));
       } else if (message.type === 'roon-control' && this.ready && this.store.activeModule === 'roon' &&
-                 this.store.settings.modules.roon?.enabled && ['previous', 'next', 'playpause', 'like'].includes(message.action)) {
+                 this.store.settings.modules.roon?.enabled && ['previous', 'next', 'playpause', 'like', 'open'].includes(message.action) &&
+                 (message.action !== 'open' || ['roon', 'spotify', 'appleMusic'].includes(message.player))) {
         Promise.resolve().then(() => this.onRoonControl?.(message.action, message.player))
           .catch(() => this.store.setDevice({ error: 'Could not control this player. Try again in the playground.' }));
       }
