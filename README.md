@@ -280,7 +280,7 @@ Third-party code and assets retain their own licences:
 | --- | --- | --- |
 | Bloub | Original face expressions and motion | [MIT licence](web/vendor/bloub/LICENSE), [notice](web/vendor/bloub/NOTICE.md) |
 | Geist | Text and pixel fonts | [SIL Open Font License](fonts/geist/OFL.txt), [font sources](fonts/geist/README.md) |
-| Frimousse and Emojibase | Offline emoji picker and search metadata | MIT; notices shipped with the packages |
+| Frimousse and Emojibase | Offline emoji picker and search metadata | [Frimousse MIT licence](https://github.com/liveblocks/frimousse/blob/v0.3.0/LICENSE), [Emojibase MIT licence](https://github.com/milesj/emojibase/blob/emojibase-data@17.0.0/LICENSE) |
 | Reicon | Previous, next and play icons | [MIT licence](public/icons/reicon/LICENSE.txt), [icon sources](public/icons/reicon/README.md) |
 
 The bundled MediaRemote Adapter retains its BSD-3-Clause licence. Its pinned source and attribution are in `vendor/mediaremote-adapter`. The Roon client packages retain their Apache-2.0 licences. Other dependencies retain the licences distributed with their packages.
