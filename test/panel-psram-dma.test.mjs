@@ -5,10 +5,12 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
-test('panel DMA integration bounds queued bounce memory and preserves BSP timing', async t => {
+test('panel DMA integration bounds queued bounce memory and preserves BSP timing', async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'panel-dma-'))
   t.after(() => rm(directory, { recursive: true, force: true }))
-  await writeFile(path.join(directory, 'esp_lcd_io_spi.h'), `#pragma once
+  await writeFile(
+    path.join(directory, 'esp_lcd_io_spi.h'),
+    `#pragma once
 #include <stdbool.h>
 typedef int esp_err_t;
 typedef int esp_lcd_spi_bus_handle_t;
@@ -18,15 +20,21 @@ typedef struct {
   void *callback, *context;
   struct { unsigned quad_mode:1, psram_dma_direct:1, cs_high:1; } flags;
 } esp_lcd_panel_io_spi_config_t;
-`)
+`,
+  )
   await mkdir(path.join(directory, 'driver'))
-  await writeFile(path.join(directory, 'driver/spi_master.h'), `#pragma once
+  await writeFile(
+    path.join(directory, 'driver/spi_master.h'),
+    `#pragma once
 #include "esp_lcd_io_spi.h"
 typedef int spi_host_device_t;
 typedef int spi_dma_chan_t;
 typedef struct { int max_transfer_sz, clock_pin, flags; } spi_bus_config_t;
-`)
-  await writeFile(path.join(directory, 'probe.c'), `#include "esp_lcd_io_spi.h"
+`,
+  )
+  await writeFile(
+    path.join(directory, 'probe.c'),
+    `#include "esp_lcd_io_spi.h"
 #include <assert.h>
 #include "driver/spi_master.h"
 #include <stdio.h>
@@ -76,9 +84,23 @@ int main(void) {
   assert(__wrap_esp_lcd_new_panel_io_spi(2, 0, &handle) == 7);
   puts("DMA queue bounded; BSP configuration and driver errors preserved");
 }
-`)
+`,
+  )
   const executable = path.join(directory, 'probe')
-  execFileSync('cc', ['-std=c11', '-O2', '-Wall', '-Wextra', '-Werror', '-I', directory,
-    path.join(directory, 'probe.c'), 'firmware/boards/waveshare-1.75-b/panel_psram_dma.c', '-o', executable])
+
+  execFileSync('cc', [
+    '-std=c11',
+    '-O2',
+    '-Wall',
+    '-Wextra',
+    '-Werror',
+    '-I',
+    directory,
+    path.join(directory, 'probe.c'),
+    'firmware/boards/waveshare-1.75-b/panel_psram_dma.c',
+    '-o',
+    executable,
+  ])
+
   assert.match(execFileSync(executable, [], { encoding: 'utf8' }), /DMA queue bounded/)
 })

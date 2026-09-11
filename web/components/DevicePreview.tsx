@@ -1,20 +1,68 @@
-import { previewDisplay } from '../lib/board-preview'
-import { AttentionOverlay } from './Attention'
+import {
+  ArrowLeft,
+  ArrowRight,
+  ChartNoAxesCombined,
+  Check,
+  Clock,
+  Heart,
+  LayoutGrid,
+  Mail,
+  Mic,
+  MicOff,
+  Minus,
+  Music2,
+  Plus,
+  Radio,
+  RotateCcw,
+  ScanFace,
+  Volume2,
+  VolumeX,
+} from 'lucide-react'
+import {
+  type CSSProperties,
+  type PointerEvent,
+  type ReactElement,
+  type ReactNode,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { resolveDesign } from '../../shared/device-appearance.mjs'
+import { previewDisplay } from '../lib/board-preview'
+import {
+  colorHex,
+  type Designs,
+  type DesignValues,
+  defaultDesign,
+  designFor,
+  percentageTop,
+  pixelLine,
+  sansLine,
+} from '../lib/design'
 import { devicePaletteDefaults } from '../lib/device-appearance'
-import { defaultDesign, designFor, colorHex, sansLine, pixelLine, percentageTop, type DesignValues, type Designs } from '../lib/design'
-import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactElement, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, ChartNoAxesCombined, Clock, Heart, LayoutGrid, Mail, Music2, Check, Minus, Plus, Volume2, VolumeX, Mic, MicOff, Radio, RotateCcw, ScanFace } from 'lucide-react'
-import SpeedDialDashboard from './SpeedDialDashboard'
+import {
+  type AudioControlRequest,
+  type AudioViewRequest,
+  animationName,
+  type ModuleId,
+  moduleNames,
+  type OpenCardRequest,
+  type PlayerId,
+  type SpeedDialRunRequest,
+  type StudioSnapshot,
+} from '../lib/studio'
+import { paletteShimmerGradient } from '../shimmer'
+import { AttentionOverlay } from './Attention'
 import Face, { useReducedMotion } from './face/Face'
+import SpeedDialDashboard from './SpeedDialDashboard'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
-import { animationName, moduleNames, type ModuleId, type PlayerId, type OpenCardRequest, type AudioControlRequest, type AudioViewRequest, type SpeedDialRunRequest, type StudioSnapshot } from '../lib/studio'
-import { paletteShimmerGradient } from '../shimmer'
 import './device-preview.css'
-import {PlayerIcon} from './PlayerIcon'
-import {RoonIcon} from './RoonIcon'
-import {roonArtworkScale,useRoonMotion} from './roon-motion'
+import { PlayerIcon } from './PlayerIcon'
+import { RoonIcon } from './RoonIcon'
+import { roonArtworkScale, useRoonMotion } from './roon-motion'
 
 export interface DevicePreviewProps {
   snapshot: StudioSnapshot | null
@@ -25,368 +73,1787 @@ export interface DevicePreviewProps {
   onUsagePage: (direction: number) => void
   onHeyPage: (direction: number) => void
   onOpenCard?: (request: OpenCardRequest) => void
-  onRoonControl?: (action: string, player?:PlayerId) => void
-  onRoonView?: (expanded:boolean) => void
-  onRoonPage?: (direction:number) => void
-  onAudioPage?: (direction:number) => void
-  onAudioControl?: (request:AudioControlRequest) => void
-  onAudioView?: (request:AudioViewRequest) => void
-  onSpeedDialRun?: (request:SpeedDialRunRequest) => void
-  onSpeedDialPage?: (direction:number) => void
+  onRoonControl?: (action: string, player?: PlayerId) => void
+  onRoonView?: (expanded: boolean) => void
+  onRoonPage?: (direction: number) => void
+  onAudioPage?: (direction: number) => void
+  onAudioControl?: (request: AudioControlRequest) => void
+  onAudioView?: (request: AudioViewRequest) => void
+  onSpeedDialRun?: (request: SpeedDialRunRequest) => void
+  onSpeedDialPage?: (direction: number) => void
   pending?: boolean
   online?: boolean
 }
 
 type Dashboard = NonNullable<StudioSnapshot['display']['dashboard']>
+
 type Metric = Dashboard['primary']
+
 const moduleIds: ModuleId[] = ['face', 'usage', 'hey', 'clock', 'roon', 'audio', 'speedDial']
-const shortNames = { face: 'Face', usage: 'Usage', hey: 'HEY', clock: 'Clock', roon: 'Music', audio:'Audio', speedDial:'Dial' }
-const moduleIcons = { face: ScanFace, usage: ChartNoAxesCombined, hey: Mail, clock: Clock, roon: Music2, audio:Volume2, speedDial:LayoutGrid }
+
+const shortNames = {
+  face: 'Face',
+  usage: 'Usage',
+  hey: 'HEY',
+  clock: 'Clock',
+  roon: 'Music',
+  audio: 'Audio',
+  speedDial: 'Dial',
+}
+
+const moduleIcons = {
+  face: ScanFace,
+  usage: ChartNoAxesCombined,
+  hey: Mail,
+  clock: Clock,
+  roon: Music2,
+  audio: Volume2,
+  speedDial: LayoutGrid,
+}
+
 const encoder = new TextEncoder()
 
 function wireText(value: string, bytes = 48) {
   let result = ''
+
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: Match the device protocol by removing C0 control characters and DEL.
   for (const character of value.replace(/[\x00-\x1f\x7f]/g, '').trim()) {
-    if (encoder.encode(result + character).length > bytes) break
+    if (encoder.encode(result + character).length > bytes) {
+      break
+    }
+
     result += character
   }
+
   return result
 }
 
-function ModuleLabel({ x, y, width, children, small = false, large = false, largeSize = 44, mail = false, pixel = false, mono = false, muted = false, align = 'left', lines = 1, truncate = false, size, color }: {
-  x: number; y: number; width: number; children: ReactNode; small?: boolean; large?: boolean; mail?: boolean; pixel?: boolean; mono?: boolean; muted?: boolean
-  align?: CSSProperties['textAlign']; lines?: number; truncate?: boolean; largeSize?: number; size?:number; color?:string
+function ModuleLabel({
+  x,
+  y,
+  width,
+  children,
+  small = false,
+  large = false,
+  largeSize = 44,
+  mail = false,
+  pixel = false,
+  mono = false,
+  muted = false,
+  align = 'left',
+  lines = 1,
+  truncate = false,
+  size,
+  color,
+}: {
+  x: number
+  y: number
+  width: number
+  children: ReactNode
+  small?: boolean
+  large?: boolean
+  mail?: boolean
+  pixel?: boolean
+  mono?: boolean
+  muted?: boolean
+  align?: CSSProperties['textAlign']
+  lines?: number
+  truncate?: boolean
+  largeSize?: number
+  size?: number
+  color?: string
 }) {
-  const fontSize=size ?? (large ? largeSize : small ? 16 : mail ? 28 : 22)
-  const height=pixel ? pixelLine(fontSize) : sansLine(fontSize)
-  return <foreignObject x={x} y={y} width={width} height={height * lines}>
-    <div className={`dp-module-label${pixel ? ' dp-module-pixel' : ''}${mono ? ' dp-module-mono' : ''}${muted ? ' dp-module-muted' : ''}${lines > 1 ? ' dp-module-wrap' : ''}`}
-      style={{ fontSize, color, lineHeight: `${height}px`, textAlign: align,
-        ...(truncate ? { display: '-webkit-box', WebkitLineClamp: lines, WebkitBoxOrient: 'vertical' as const } : {}) }}>
-      {children}
-    </div>
-  </foreignObject>
+  const fontSize = size ?? (large ? largeSize : small ? 16 : mail ? 28 : 22)
+  const height = pixel ? pixelLine(fontSize) : sansLine(fontSize)
+
+  return (
+    <foreignObject x={x} y={y} width={width} height={height * lines}>
+      <div
+        className={`dp-module-label${pixel ? ' dp-module-pixel' : ''}${mono ? ' dp-module-mono' : ''}${muted ? ' dp-module-muted' : ''}${lines > 1 ? ' dp-module-wrap' : ''}`}
+        style={{
+          fontSize,
+          color,
+          lineHeight: `${height}px`,
+          textAlign: align,
+          ...(truncate
+            ? {
+                display: '-webkit-box',
+                WebkitLineClamp: lines,
+                WebkitBoxOrient: 'vertical' as const,
+              }
+            : {}),
+        }}
+      >
+        {children}
+      </div>
+    </foreignObject>
+  )
 }
 
-type CardAction = { request?: OpenCardRequest; label: string; disabled: boolean; onOpen?: (request: OpenCardRequest) => void; onSwipe: (x:number,y:number) => void }
-
-function CardHit({ x, y, width, height, radius, request, label, disabled, onOpen, onSwipe }: CardAction & { x:number;y:number;width:number;height:number;radius:number }) {
-  const gesture=useRef<{id:number;x:number;y:number;at:number;travel:number;token:string}|null>(null)
-  const unavailable=disabled||!request||!onOpen
-  const open=()=>{if(!unavailable)onOpen!(request!)}
-  return <foreignObject x={x} y={y} width={width} height={height}>
-    <button className="dp-card-hit" style={{borderRadius:radius}} disabled={unavailable} aria-label={label}
-      onPointerDown={event=>{event.stopPropagation();if(unavailable||!event.isPrimary||event.button!==0)return;gesture.current={id:event.pointerId,x:event.clientX,y:event.clientY,at:performance.now(),travel:0,token:request!.token};event.currentTarget.setPointerCapture(event.pointerId)}}
-      onPointerMove={event=>{const start=gesture.current;if(start?.id===event.pointerId)start.travel=Math.max(start.travel,Math.abs(event.clientX-start.x),Math.abs(event.clientY-start.y))}}
-      onPointerUp={event=>{event.stopPropagation();const start=gesture.current;gesture.current=null;if(!start||start.id!==event.pointerId)return;const elapsed=performance.now()-start.at;if(elapsed>1500)return;const x=event.clientX-start.x,y=event.clientY-start.y;onSwipe(x,y);if(elapsed<=500&&start.travel<12&&Math.abs(x)<12&&Math.abs(y)<12&&start.token===request?.token)open()}}
-      onPointerCancel={()=>{gesture.current=null}} onLostPointerCapture={()=>{gesture.current=null}}
-      onClick={event=>{event.stopPropagation();if(event.detail===0)open()}}/>
-  </foreignObject>
+type CardAction = {
+  request?: OpenCardRequest
+  label: string
+  disabled: boolean
+  onOpen?: (request: OpenCardRequest) => void
+  onSwipe: (x: number, y: number) => void
 }
 
-function UsageCard({ metric, y, fallback, showBackground, d, action }: { metric: Metric; y: number; fallback: string; showBackground: boolean; d:DesignValues; action:CardAction }) {
+function CardHit({
+  x,
+  y,
+  width,
+  height,
+  radius,
+  request,
+  label,
+  disabled,
+  onOpen,
+  onSwipe,
+}: CardAction & { x: number; y: number; width: number; height: number; radius: number }) {
+  const gesture = useRef<{
+    id: number
+    x: number
+    y: number
+    at: number
+    travel: number
+    token: string
+  } | null>(null)
+
+  const unavailable = disabled || !request || !onOpen
+
+  const open = () => {
+    if (!unavailable) {
+      onOpen!(request!)
+    }
+  }
+
+  return (
+    <foreignObject x={x} y={y} width={width} height={height}>
+      <button
+        type="button"
+        className="dp-card-hit"
+        style={{ borderRadius: radius }}
+        disabled={unavailable}
+        aria-label={label}
+        onPointerDown={(event) => {
+          event.stopPropagation()
+
+          if (unavailable || !event.isPrimary || event.button !== 0) {
+            return
+          }
+
+          gesture.current = {
+            id: event.pointerId,
+            x: event.clientX,
+            y: event.clientY,
+            at: performance.now(),
+            travel: 0,
+            token: request!.token,
+          }
+          event.currentTarget.setPointerCapture(event.pointerId)
+        }}
+        onPointerMove={(event) => {
+          const start = gesture.current
+
+          if (start?.id === event.pointerId) {
+            start.travel = Math.max(
+              start.travel,
+              Math.abs(event.clientX - start.x),
+              Math.abs(event.clientY - start.y),
+            )
+          }
+        }}
+        onPointerUp={(event) => {
+          event.stopPropagation()
+          const start = gesture.current
+          gesture.current = null
+
+          if (!start || start.id !== event.pointerId) {
+            return
+          }
+
+          const elapsed = performance.now() - start.at
+
+          if (elapsed > 1500) {
+            return
+          }
+
+          const x = event.clientX - start.x
+          const y = event.clientY - start.y
+          onSwipe(x, y)
+
+          if (
+            elapsed <= 500 &&
+            start.travel < 12 &&
+            Math.abs(x) < 12 &&
+            Math.abs(y) < 12 &&
+            start.token === request?.token
+          ) {
+            open()
+          }
+        }}
+        onPointerCancel={() => {
+          gesture.current = null
+        }}
+        onLostPointerCapture={() => {
+          gesture.current = null
+        }}
+        onClick={(event) => {
+          event.stopPropagation()
+
+          if (event.detail === 0) {
+            open()
+          }
+        }}
+      />
+    </foreignObject>
+  )
+}
+
+function UsageCard({
+  metric,
+  y,
+  fallback,
+  showBackground,
+  d,
+  action,
+}: {
+  metric: Metric
+  y: number
+  fallback: string
+  showBackground: boolean
+  d: DesignValues
+  action: CardAction
+}) {
   const patternId = useId()
   const available = metric?.remaining !== null && Number.isFinite(metric?.remaining)
   const remaining = available ? Math.max(0, Math.min(100, metric!.remaining!)) : 0
-  const barColor = colorHex(remaining <= 10 ? d.lowColor : remaining <= 25 ? d.warnColor : d.fillColor)
-  const inner=d.width-2*d.padding, x=d.x+d.padding
-  const filledWidth=remaining>0?Math.max(1,Math.round(inner*remaining/100)):0
-  const cell=Math.min(d.barPixelSize,d.barHeight), step=cell+d.barPixelGap
-  const cols=Math.max(1,Math.floor((inner+d.barPixelGap)/step)), rows=Math.max(1,Math.floor((d.barHeight+d.barPixelGap)/step))
-  const gridWidth=cols*step-d.barPixelGap, gridHeight=rows*step-d.barPixelGap
-  const gridX=x+Math.floor((inner-gridWidth)/2), gridY=y+d.barY+Math.floor((d.barHeight-gridHeight)/2)
-  const numberSize=d.numberSize || (showBackground?44:56)
-  const pillWidth=Math.min(163,Math.floor(inner/2)+9)
-  const top=Math.min(0,d.titleY,percentageTop(numberSize)+d.valueOffset,d.pillY,d.barY,d.resetY)
-  const bottom=Math.max(d.height,d.titleY+sansLine(d.titleSize),percentageTop(numberSize)+d.valueOffset+pixelLine(numberSize),d.pillY+d.pillHeight,d.barY+d.barHeight,d.resetY+sansLine(d.resetSize))
-  return <g>
-    <rect x={d.x} y={y} width={d.width} height={d.height} rx={d.radius} fill={showBackground ? colorHex(d.cardColor) : 'none'} />
-    <ModuleLabel x={x} y={y+d.titleY} width={inner} size={d.titleSize} color={colorHex(d.mutedColor)}>{wireText(metric?.provider || '', 16)}</ModuleLabel>
-    <ModuleLabel x={x} y={y+percentageTop(numberSize)+d.valueOffset} width={inner-pillWidth-7} size={numberSize} pixel color={colorHex(d.textColor)}>{available ? `${Math.round(remaining)}%` : '--'}</ModuleLabel>
-    <foreignObject x={d.x+d.width-d.padding-pillWidth} y={y+d.pillY} width={pillWidth} height={d.pillHeight}>
-      <div className="dp-card-pill" style={{height:d.pillHeight,lineHeight:`${d.pillHeight}px`,borderRadius:d.pillHeight/2,paddingInline:d.pillPadding,color:colorHex(d.textColor)}}>{wireText(metric?.label || fallback,16)}</div>
-    </foreignObject>
-    {d.barStyle===0?<>
-      <rect x={x} y={y+d.barY} width={inner} height={d.barHeight} rx={d.barHeight/2} fill={colorHex(d.trackColor)} />
-      {filledWidth>0&&<rect x={x} y={y+d.barY} width={filledWidth} height={d.barHeight} rx={Math.min(d.barHeight/2,filledWidth/2)} fill={barColor} />}
-    </>:<>
-      <defs>
-        {[['track',colorHex(d.trackColor)],['fill',barColor]].map(([part,color])=><pattern key={part} id={`${patternId}-${part}`} patternUnits="userSpaceOnUse" x={gridX} y={gridY} width={step} height={step}>
-          {d.barStyle===2?<circle cx={cell/2} cy={cell/2} r={cell/2} fill={color}/>:<rect width={cell} height={cell} fill={color}/>}
-        </pattern>)}
-        <clipPath id={`${patternId}-clip`}><rect x={x} y={y+d.barY} width={filledWidth} height={d.barHeight}/></clipPath>
-        <clipPath id={`${patternId}-remaining`}><rect x={x+filledWidth} y={y+d.barY} width={inner-filledWidth} height={d.barHeight}/></clipPath>
-      </defs>
-      <rect x={gridX} y={gridY} width={gridWidth} height={gridHeight} fill={`url(#${patternId}-track)`} clipPath={`url(#${patternId}-remaining)`}/>
-      {filledWidth>0&&<rect x={gridX} y={gridY} width={gridWidth} height={gridHeight} fill={`url(#${patternId}-fill)`} clipPath={`url(#${patternId}-clip)`}/>}
-    </>}
-    <ModuleLabel x={x} y={y+d.resetY} width={inner} size={d.resetSize} color={colorHex(d.mutedColor)}>{wireText(metric?.reset || 'Reset unavailable',24)}</ModuleLabel>
-    <CardHit x={d.x} y={y+top} width={d.width} height={bottom-top} radius={d.radius} {...action}/>
-  </g>
+
+  const barColor = colorHex(
+    remaining <= 10 ? d.lowColor : remaining <= 25 ? d.warnColor : d.fillColor,
+  )
+
+  const inner = d.width - 2 * d.padding
+  const x = d.x + d.padding
+  const filledWidth = remaining > 0 ? Math.max(1, Math.round((inner * remaining) / 100)) : 0
+  const cell = Math.min(d.barPixelSize, d.barHeight)
+  const step = cell + d.barPixelGap
+  const cols = Math.max(1, Math.floor((inner + d.barPixelGap) / step))
+  const rows = Math.max(1, Math.floor((d.barHeight + d.barPixelGap) / step))
+  const gridWidth = cols * step - d.barPixelGap
+  const gridHeight = rows * step - d.barPixelGap
+  const gridX = x + Math.floor((inner - gridWidth) / 2)
+  const gridY = y + d.barY + Math.floor((d.barHeight - gridHeight) / 2)
+  const numberSize = d.numberSize || (showBackground ? 44 : 56)
+  const pillWidth = Math.min(163, Math.floor(inner / 2) + 9)
+
+  const top = Math.min(
+    0,
+    d.titleY,
+    percentageTop(numberSize) + d.valueOffset,
+    d.pillY,
+    d.barY,
+    d.resetY,
+  )
+
+  const bottom = Math.max(
+    d.height,
+    d.titleY + sansLine(d.titleSize),
+    percentageTop(numberSize) + d.valueOffset + pixelLine(numberSize),
+    d.pillY + d.pillHeight,
+    d.barY + d.barHeight,
+    d.resetY + sansLine(d.resetSize),
+  )
+
+  return (
+    <g>
+      <rect
+        x={d.x}
+        y={y}
+        width={d.width}
+        height={d.height}
+        rx={d.radius}
+        fill={showBackground ? colorHex(d.cardColor) : 'none'}
+      />
+      <ModuleLabel
+        x={x}
+        y={y + d.titleY}
+        width={inner}
+        size={d.titleSize}
+        color={colorHex(d.mutedColor)}
+      >
+        {wireText(metric?.provider || '', 16)}
+      </ModuleLabel>
+      <ModuleLabel
+        x={x}
+        y={y + percentageTop(numberSize) + d.valueOffset}
+        width={inner - pillWidth - 7}
+        size={numberSize}
+        pixel
+        color={colorHex(d.textColor)}
+      >
+        {available ? `${Math.round(remaining)}%` : '--'}
+      </ModuleLabel>
+      <foreignObject
+        x={d.x + d.width - d.padding - pillWidth}
+        y={y + d.pillY}
+        width={pillWidth}
+        height={d.pillHeight}
+      >
+        <div
+          className="dp-card-pill"
+          style={{
+            height: d.pillHeight,
+            lineHeight: `${d.pillHeight}px`,
+            borderRadius: d.pillHeight / 2,
+            paddingInline: d.pillPadding,
+            color: colorHex(d.textColor),
+          }}
+        >
+          {wireText(metric?.label || fallback, 16)}
+        </div>
+      </foreignObject>
+      {d.barStyle === 0 ? (
+        <>
+          <rect
+            x={x}
+            y={y + d.barY}
+            width={inner}
+            height={d.barHeight}
+            rx={d.barHeight / 2}
+            fill={colorHex(d.trackColor)}
+          />
+          {filledWidth > 0 && (
+            <rect
+              x={x}
+              y={y + d.barY}
+              width={filledWidth}
+              height={d.barHeight}
+              rx={Math.min(d.barHeight / 2, filledWidth / 2)}
+              fill={barColor}
+            />
+          )}
+        </>
+      ) : (
+        <>
+          <defs>
+            {[
+              ['track', colorHex(d.trackColor)],
+              ['fill', barColor],
+            ].map(([part, color]) => (
+              <pattern
+                key={part}
+                id={`${patternId}-${part}`}
+                patternUnits="userSpaceOnUse"
+                x={gridX}
+                y={gridY}
+                width={step}
+                height={step}
+              >
+                {d.barStyle === 2 ? (
+                  <circle cx={cell / 2} cy={cell / 2} r={cell / 2} fill={color} />
+                ) : (
+                  <rect width={cell} height={cell} fill={color} />
+                )}
+              </pattern>
+            ))}
+            <clipPath id={`${patternId}-clip`}>
+              <rect x={x} y={y + d.barY} width={filledWidth} height={d.barHeight} />
+            </clipPath>
+            <clipPath id={`${patternId}-remaining`}>
+              <rect
+                x={x + filledWidth}
+                y={y + d.barY}
+                width={inner - filledWidth}
+                height={d.barHeight}
+              />
+            </clipPath>
+          </defs>
+          <rect
+            x={gridX}
+            y={gridY}
+            width={gridWidth}
+            height={gridHeight}
+            fill={`url(#${patternId}-track)`}
+            clipPath={`url(#${patternId}-remaining)`}
+          />
+          {filledWidth > 0 && (
+            <rect
+              x={gridX}
+              y={gridY}
+              width={gridWidth}
+              height={gridHeight}
+              fill={`url(#${patternId}-fill)`}
+              clipPath={`url(#${patternId}-clip)`}
+            />
+          )}
+        </>
+      )}
+      <ModuleLabel
+        x={x}
+        y={y + d.resetY}
+        width={inner}
+        size={d.resetSize}
+        color={colorHex(d.mutedColor)}
+      >
+        {wireText(metric?.reset || 'Reset unavailable', 24)}
+      </ModuleLabel>
+      <CardHit
+        x={d.x}
+        y={y + top}
+        width={d.width}
+        height={bottom - top}
+        radius={d.radius}
+        {...action}
+      />
+    </g>
+  )
 }
 
-function CheckingIndicator({ animationMs, reduced, color, foreground }: { animationMs: number; reduced: boolean; color:number; foreground:number }) {
+function CheckingIndicator({
+  animationMs,
+  reduced,
+  color,
+  foreground,
+}: {
+  animationMs: number
+  reduced: boolean
+  color: number
+  foreground: number
+}) {
   const motionReduced = useReducedMotion(reduced)
+
   const clock = useRef({ animationMs, receivedAt: performance.now() })
+
   const [time, setTime] = useState(animationMs / 1000)
-  useEffect(() => { clock.current = { animationMs, receivedAt: performance.now() } }, [animationMs])
+
   useEffect(() => {
-    if (motionReduced) return
+    clock.current = { animationMs, receivedAt: performance.now() }
+  }, [animationMs])
+
+  useEffect(() => {
+    if (motionReduced) {
+      return
+    }
+
     let frame: number
+
     const update = (now: number) => {
       setTime((clock.current.animationMs + now - clock.current.receivedAt) / 1000)
       frame = requestAnimationFrame(update)
     }
+
     frame = requestAnimationFrame(update)
+
     return () => cancelAnimationFrame(frame)
   }, [motionReduced])
-  return <ModuleLabel x={173} y={408} width={120} small align="center">
-    <span className="dp-checking shimmer-text" role="status" style={{ backgroundImage: paletteShimmerGradient(time, motionReduced, color, foreground) }}>Checking</span>
-  </ModuleLabel>
+
+  return (
+    <ModuleLabel x={173} y={408} width={120} small align="center">
+      <span
+        className="dp-checking shimmer-text"
+        role="status"
+        style={{ backgroundImage: paletteShimmerGradient(time, motionReduced, color, foreground) }}
+      >
+        Checking
+      </span>
+    </ModuleLabel>
+  )
 }
 
-function RoonDashboard({dashboard,d,reduced,pending,onControl,onView,onSwipe}:{dashboard:Dashboard;d:DesignValues;reduced:boolean;pending?:boolean;onControl?:(action:string,player?:PlayerId)=>void;onView?:(expanded:boolean)=>void;onSwipe?:(x:number,y:number)=>void}) {
-  const expanded=dashboard.expanded===true
-  const motionReduced=useReducedMotion(reduced)
-  const {progress,chrome,angle}=useRoonMotion(expanded,!!dashboard.playing,d.animateArtwork===1,d.spinArtwork===1,motionReduced)
-  const artClip=useId(), gesture=useRef<{x:number;y:number;id:number;at:number;travel:number}|null>(null)
-  const size=d.artSize+(430-d.artSize)*progress, x=(466-size)/2, y=d.artY+(18-d.artY)*progress
-  const radius=d.artRadius+(215-d.artRadius)*progress
-  const imageSize=size*roonArtworkScale(size,radius,angle),centerX=x+size/2,centerY=y+size/2
-  const toggle=()=>{if(!pending&&(dashboard.artId||expanded)&&onView)onView(!expanded)}
-  return <>
-    <g opacity={chrome} transform={`translate(0 ${(1-chrome)*12})`} aria-hidden={expanded}>
-      <ModuleLabel x={58} y={d.titleY} width={350} align="center" size={d.titleSize} color={colorHex(d.textColor)}>{dashboard.track||'Nothing playing'}</ModuleLabel>
-      <ModuleLabel x={58} y={d.artistY} width={350} align="center" size={d.artistSize} color={colorHex(d.mutedColor)}>{dashboard.artist||''}</ModuleLabel>
-      {(['previous','playpause','next'] as const).map((action,index)=><foreignObject key={action} x={233+(index-1)*(d.controlSize+d.gap)-d.controlSize/2} y={d.controlsY} width={d.controlSize} height={d.controlSize}>
-        <button className="dp-roon-control" style={{width:d.controlSize,height:d.controlSize,background:'transparent',color:colorHex(d.textColor)}} aria-label={action==='playpause'?(dashboard.playing?`Pause ${dashboard.playerName||'music'}`:`Play ${dashboard.playerName||'music'}`):action==='previous'?'Previous track':'Next track'} disabled={expanded||progress>0||pending||!onControl||(action==='previous'&&!dashboard.canPrevious)||(action==='next'&&!dashboard.canNext)} onPointerDown={e=>e.stopPropagation()} onPointerUp={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();onControl?.(action,dashboard.player)}}><svg viewBox="0 0 44 44" width={d.controlSize} height={d.controlSize} fill="currentColor" aria-hidden="true">{action==='playpause'?(dashboard.playing?<><rect x="12" y="8" width="6" height="28"/><rect x="26" y="8" width="6" height="28"/></>:<RoonIcon name="play" x={5} y={5} size={34}/>):<RoonIcon name={action} x={10} y={10} size={24}/>}</svg></button>
-      </foreignObject>)}
-    </g>
-    <defs><clipPath id={artClip}><rect x={x} y={y} width={size} height={size} rx={radius}/></clipPath></defs>
-    <g clipPath={`url(#${artClip})`}><rect x={x} y={y} width={size} height={size} fill="var(--device-surface,#151515)"/>
-      {dashboard.artId?<image href={`/api/roon/art/${dashboard.artId}`} x={centerX-imageSize/2} y={centerY-imageSize/2} width={imageSize} height={imageSize} preserveAspectRatio="xMidYMid slice" transform={angle?`rotate(${angle} ${centerX} ${centerY})`:undefined}/>:null}
-    </g>
-    <foreignObject x={x} y={y} width={size} height={size}>
-      <button className="dp-roon-art-hit" style={{width:'100%',height:'100%',borderRadius:radius,cursor:!dashboard.artId&&!expanded?'default':undefined}} tabIndex={!dashboard.artId&&!expanded?-1:undefined} aria-label={expanded?'Collapse album artwork':'Expand album artwork'} aria-pressed={expanded} disabled={pending}
-        onPointerDown={e=>{e.stopPropagation();if(e.isPrimary&&e.button===0){gesture.current={x:e.clientX,y:e.clientY,id:e.pointerId,at:performance.now(),travel:0};e.currentTarget.setPointerCapture(e.pointerId)}}}
-        onPointerMove={e=>{const start=gesture.current;if(start&&start.id===e.pointerId)start.travel=Math.max(start.travel,Math.abs(e.clientX-start.x),Math.abs(e.clientY-start.y))}}
-        onPointerUp={e=>{e.stopPropagation();const start=gesture.current;gesture.current=null;if(!start||start.id!==e.pointerId||performance.now()-start.at>1500)return;const dx=e.clientX-start.x,dy=e.clientY-start.y;onSwipe?.(dx,dy);if(start.travel<12&&Math.abs(dx)<12&&Math.abs(dy)<12)toggle()}}
-        onPointerCancel={()=>{gesture.current=null}} onLostPointerCapture={()=>{gesture.current=null}}
-        onClick={e=>{e.stopPropagation();if(e.detail===0)toggle()}}/>
-    </foreignObject>
-    {!expanded&&progress===0&&<>
-      {dashboard.player!=='system'&&<foreignObject x={x+1} y={y+1} width={44} height={44}><DeviceTap key={dashboard.player||'roon'} className="dp-player-badge" label={`Open ${dashboard.playerName||'Roon'}`} disabled={!!pending||!onControl} onSwipe={(dx,dy)=>onSwipe?.(dx,dy)} onActivate={()=>onControl?.('open',dashboard.player||'roon')}><PlayerIcon player={dashboard.player||'roon'} size={30}/></DeviceTap></foreignObject>}
-      {dashboard.canLike&&<foreignObject x={x+size-44} y={y+size-44} width={36} height={36}><button className="dp-player-like" aria-label={dashboard.liked?'Remove from favourites':'Add to favourites'} aria-pressed={!!dashboard.liked} disabled={pending||!onControl} onPointerDown={e=>e.stopPropagation()} onPointerUp={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();onControl?.('like',dashboard.player)}}><Heart size={20} fill={dashboard.liked?'currentColor':'none'}/></button></foreignObject>}
-    </>}
-  </>
+function RoonDashboard({
+  dashboard,
+  d,
+  reduced,
+  pending,
+  onControl,
+  onView,
+  onSwipe,
+}: {
+  dashboard: Dashboard
+  d: DesignValues
+  reduced: boolean
+  pending?: boolean
+  onControl?: (action: string, player?: PlayerId) => void
+  onView?: (expanded: boolean) => void
+  onSwipe?: (x: number, y: number) => void
+}) {
+  const expanded = dashboard.expanded === true
+  const motionReduced = useReducedMotion(reduced)
+
+  const { progress, chrome, angle } = useRoonMotion(
+    expanded,
+    !!dashboard.playing,
+    d.animateArtwork === 1,
+    d.spinArtwork === 1,
+    motionReduced,
+  )
+
+  const artClip = useId()
+
+  const gesture = useRef<{ x: number; y: number; id: number; at: number; travel: number } | null>(
+    null,
+  )
+
+  const size = d.artSize + (430 - d.artSize) * progress
+  const x = (466 - size) / 2
+  const y = d.artY + (18 - d.artY) * progress
+  const radius = d.artRadius + (215 - d.artRadius) * progress
+  const imageSize = size * roonArtworkScale(size, radius, angle)
+  const centerX = x + size / 2
+  const centerY = y + size / 2
+
+  const toggle = () => {
+    if (!pending && (dashboard.artId || expanded) && onView) {
+      onView(!expanded)
+    }
+  }
+
+  return (
+    <>
+      <g opacity={chrome} transform={`translate(0 ${(1 - chrome) * 12})`} aria-hidden={expanded}>
+        <ModuleLabel
+          x={58}
+          y={d.titleY}
+          width={350}
+          align="center"
+          size={d.titleSize}
+          color={colorHex(d.textColor)}
+        >
+          {dashboard.track || 'Nothing playing'}
+        </ModuleLabel>
+        <ModuleLabel
+          x={58}
+          y={d.artistY}
+          width={350}
+          align="center"
+          size={d.artistSize}
+          color={colorHex(d.mutedColor)}
+        >
+          {dashboard.artist || ''}
+        </ModuleLabel>
+        {(['previous', 'playpause', 'next'] as const).map((action, index) => (
+          <foreignObject
+            key={action}
+            x={233 + (index - 1) * (d.controlSize + d.gap) - d.controlSize / 2}
+            y={d.controlsY}
+            width={d.controlSize}
+            height={d.controlSize}
+          >
+            <button
+              type="button"
+              className="dp-roon-control"
+              style={{
+                width: d.controlSize,
+                height: d.controlSize,
+                background: 'transparent',
+                color: colorHex(d.textColor),
+              }}
+              aria-label={
+                action === 'playpause'
+                  ? dashboard.playing
+                    ? `Pause ${dashboard.playerName || 'music'}`
+                    : `Play ${dashboard.playerName || 'music'}`
+                  : action === 'previous'
+                    ? 'Previous track'
+                    : 'Next track'
+              }
+              disabled={
+                expanded ||
+                progress > 0 ||
+                pending ||
+                !onControl ||
+                (action === 'previous' && !dashboard.canPrevious) ||
+                (action === 'next' && !dashboard.canNext)
+              }
+              onPointerDown={(e) => e.stopPropagation()}
+              onPointerUp={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                onControl?.(action, dashboard.player)
+              }}
+            >
+              <svg
+                viewBox="0 0 44 44"
+                width={d.controlSize}
+                height={d.controlSize}
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                {action === 'playpause' ? (
+                  dashboard.playing ? (
+                    <>
+                      <rect x="12" y="8" width="6" height="28" />
+                      <rect x="26" y="8" width="6" height="28" />
+                    </>
+                  ) : (
+                    <RoonIcon name="play" x={5} y={5} size={34} />
+                  )
+                ) : (
+                  <RoonIcon name={action} x={10} y={10} size={24} />
+                )}
+              </svg>
+            </button>
+          </foreignObject>
+        ))}
+      </g>
+      <defs>
+        <clipPath id={artClip}>
+          <rect x={x} y={y} width={size} height={size} rx={radius} />
+        </clipPath>
+      </defs>
+      <g clipPath={`url(#${artClip})`}>
+        <rect x={x} y={y} width={size} height={size} fill="var(--device-surface,#151515)" />
+        {dashboard.artId ? (
+          <image
+            href={`/api/roon/art/${dashboard.artId}`}
+            x={centerX - imageSize / 2}
+            y={centerY - imageSize / 2}
+            width={imageSize}
+            height={imageSize}
+            preserveAspectRatio="xMidYMid slice"
+            transform={angle ? `rotate(${angle} ${centerX} ${centerY})` : undefined}
+          />
+        ) : null}
+      </g>
+      <foreignObject x={x} y={y} width={size} height={size}>
+        <button
+          type="button"
+          className="dp-roon-art-hit"
+          style={{
+            width: '100%',
+            height: '100%',
+            borderRadius: radius,
+            cursor: !dashboard.artId && !expanded ? 'default' : undefined,
+          }}
+          tabIndex={!dashboard.artId && !expanded ? -1 : undefined}
+          aria-label={expanded ? 'Collapse album artwork' : 'Expand album artwork'}
+          aria-pressed={expanded}
+          disabled={pending}
+          onPointerDown={(e) => {
+            e.stopPropagation()
+
+            if (e.isPrimary && e.button === 0) {
+              gesture.current = {
+                x: e.clientX,
+                y: e.clientY,
+                id: e.pointerId,
+                at: performance.now(),
+                travel: 0,
+              }
+              e.currentTarget.setPointerCapture(e.pointerId)
+            }
+          }}
+          onPointerMove={(e) => {
+            const start = gesture.current
+
+            if (start && start.id === e.pointerId) {
+              start.travel = Math.max(
+                start.travel,
+                Math.abs(e.clientX - start.x),
+                Math.abs(e.clientY - start.y),
+              )
+            }
+          }}
+          onPointerUp={(e) => {
+            e.stopPropagation()
+            const start = gesture.current
+            gesture.current = null
+
+            if (!start || start.id !== e.pointerId || performance.now() - start.at > 1500) {
+              return
+            }
+
+            const dx = e.clientX - start.x
+            const dy = e.clientY - start.y
+            onSwipe?.(dx, dy)
+
+            if (start.travel < 12 && Math.abs(dx) < 12 && Math.abs(dy) < 12) {
+              toggle()
+            }
+          }}
+          onPointerCancel={() => {
+            gesture.current = null
+          }}
+          onLostPointerCapture={() => {
+            gesture.current = null
+          }}
+          onClick={(e) => {
+            e.stopPropagation()
+
+            if (e.detail === 0) {
+              toggle()
+            }
+          }}
+        />
+      </foreignObject>
+      {!expanded && progress === 0 && (
+        <>
+          {dashboard.player !== 'system' && (
+            <foreignObject x={x + 1} y={y + 1} width={44} height={44}>
+              <DeviceTap
+                key={dashboard.player || 'roon'}
+                className="dp-player-badge"
+                label={`Open ${dashboard.playerName || 'Roon'}`}
+                disabled={!!pending || !onControl}
+                onSwipe={(dx, dy) => onSwipe?.(dx, dy)}
+                onActivate={() => onControl?.('open', dashboard.player || 'roon')}
+              >
+                <PlayerIcon player={dashboard.player || 'roon'} size={30} />
+              </DeviceTap>
+            </foreignObject>
+          )}
+
+          {dashboard.canLike && (
+            <foreignObject x={x + size - 44} y={y + size - 44} width={36} height={36}>
+              <button
+                type="button"
+                className="dp-player-like"
+                aria-label={dashboard.liked ? 'Remove from favourites' : 'Add to favourites'}
+                aria-pressed={!!dashboard.liked}
+                disabled={pending || !onControl}
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerUp={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onControl?.('like', dashboard.player)
+                }}
+              >
+                <Heart size={20} fill={dashboard.liked ? 'currentColor' : 'none'} />
+              </button>
+            </foreignObject>
+          )}
+        </>
+      )}
+    </>
+  )
 }
 
-function DeviceTap({children,label,disabled,onActivate,onSwipe,className,style,pressed}:{children:ReactNode;label:string;disabled:boolean;onActivate:()=>void;onSwipe:(x:number,y:number)=>void;className:string;style?:CSSProperties;pressed?:boolean}) {
-  const gesture=useRef<{id:number;x:number;y:number;at:number;travel:number}|null>(null)
-  return <button className={className} style={style} aria-label={label} aria-pressed={pressed} disabled={disabled}
-    onPointerDown={event=>{event.stopPropagation();if(!event.isPrimary||event.button!==0)return;gesture.current={id:event.pointerId,x:event.clientX,y:event.clientY,at:performance.now(),travel:0};event.currentTarget.setPointerCapture(event.pointerId)}}
-    onPointerMove={event=>{const start=gesture.current;if(start?.id===event.pointerId)start.travel=Math.max(start.travel,Math.abs(event.clientX-start.x),Math.abs(event.clientY-start.y))}}
-    onPointerUp={event=>{event.stopPropagation();const start=gesture.current;gesture.current=null;if(!start||start.id!==event.pointerId||performance.now()-start.at>1500)return;const x=event.clientX-start.x,y=event.clientY-start.y;onSwipe(x,y);if(start.travel<12&&Math.abs(x)<12&&Math.abs(y)<12)onActivate()}}
-    onPointerCancel={()=>{gesture.current=null}} onLostPointerCapture={()=>{gesture.current=null}}
-    onClick={event=>{event.stopPropagation();if(event.detail===0)onActivate()}}>{children}</button>
+function DeviceTap({
+  children,
+  label,
+  disabled,
+  onActivate,
+  onSwipe,
+  className,
+  style,
+  pressed,
+}: {
+  children: ReactNode
+  label: string
+  disabled: boolean
+  onActivate: () => void
+  onSwipe: (x: number, y: number) => void
+  className: string
+  style?: CSSProperties
+  pressed?: boolean
+}) {
+  const gesture = useRef<{ id: number; x: number; y: number; at: number; travel: number } | null>(
+    null,
+  )
+
+  return (
+    <button
+      type="button"
+      className={className}
+      style={style}
+      aria-label={label}
+      aria-pressed={pressed}
+      disabled={disabled}
+      onPointerDown={(event) => {
+        event.stopPropagation()
+
+        if (!event.isPrimary || event.button !== 0) {
+          return
+        }
+
+        gesture.current = {
+          id: event.pointerId,
+          x: event.clientX,
+          y: event.clientY,
+          at: performance.now(),
+          travel: 0,
+        }
+        event.currentTarget.setPointerCapture(event.pointerId)
+      }}
+      onPointerMove={(event) => {
+        const start = gesture.current
+
+        if (start?.id === event.pointerId) {
+          start.travel = Math.max(
+            start.travel,
+            Math.abs(event.clientX - start.x),
+            Math.abs(event.clientY - start.y),
+          )
+        }
+      }}
+      onPointerUp={(event) => {
+        event.stopPropagation()
+        const start = gesture.current
+        gesture.current = null
+
+        if (!start || start.id !== event.pointerId || performance.now() - start.at > 1500) {
+          return
+        }
+
+        const x = event.clientX - start.x
+        const y = event.clientY - start.y
+        onSwipe(x, y)
+
+        if (start.travel < 12 && Math.abs(x) < 12 && Math.abs(y) < 12) {
+          onActivate()
+        }
+      }}
+      onPointerCancel={() => {
+        gesture.current = null
+      }}
+      onLostPointerCapture={() => {
+        gesture.current = null
+      }}
+      onClick={(event) => {
+        event.stopPropagation()
+
+        if (event.detail === 0) {
+          onActivate()
+        }
+      }}
+    >
+      {children}
+    </button>
+  )
 }
 
-function AudioDashboard({dashboard,d,pending,onControl,onView,onSwipe}:{dashboard:Dashboard;d:DesignValues;pending?:boolean;onControl?:(request:AudioControlRequest)=>void;onView?:(request:AudioViewRequest)=>void;onSwipe:(x:number,y:number)=>void}) {
-  const scope=dashboard.scope||'output'
-  const volume=typeof dashboard.volume==='number'&&Number.isFinite(dashboard.volume)?Math.max(0,Math.min(100,Math.round(dashboard.volume))):null
-  const valid=dashboard.deviceId!==undefined&&!!onControl&&!pending
-  const viewValid=dashboard.deviceId!==undefined&&!!onView&&!pending
-  const open=()=>{if(viewValid)onView!({open:true,scope,deviceId:dashboard.deviceId!})}
-  if(dashboard.pickerOpen)return <>
-    {(dashboard.devices||[]).slice(0,3).map((device,index)=><foreignObject key={`${scope}:${dashboard.deviceId}:${device.id}`} x={63} y={135+68*index} width={340} height={60}>
-      <DeviceTap className="dp-audio-picker-row" style={{color:colorHex(d.textColor)}} label={`${device.name}${device.active?', active device':''}`} pressed={device.active} disabled={!valid} onSwipe={onSwipe} onActivate={()=>{if(valid)onControl!({scope,deviceId:dashboard.deviceId!,action:'device',value:device.id})}}><span className="dp-audio-picker-check" aria-hidden="true">{device.active&&<Check size={24}/>}</span><span className="dp-audio-picker-name">{wireText(device.name,96)}</span></DeviceTap>
-    </foreignObject>)}
-    {!dashboard.devices?.length&&<ModuleLabel x={63} y={220} width={340} align="center" size={22} color={colorHex(d.mutedColor)}>No devices available</ModuleLabel>}
-    {(dashboard.pageCount??1)>1&&<ModuleLabel x={133} y={d.controlsY+d.controlSize/2-sansLine(16)/2} width={200} align="center" size={16} mono color={colorHex(d.mutedColor)}>{String((dashboard.pageIndex??0)+1).padStart(String(dashboard.pageCount).length,'\u00a0')} / {dashboard.pageCount}</ModuleLabel>}
-  </>
-  const buttons=[{action:'volume' as const,value:Math.max(0,(volume??0)-5),label:'Decrease volume',Icon:Minus,enabled:dashboard.canVolume&&volume!==null&&volume>0},{action:'mute' as const,value:!dashboard.muted,label:dashboard.muted?'Unmute':'Mute',Icon:scope==='input'?(dashboard.muted?MicOff:Mic):(dashboard.muted?VolumeX:Volume2),enabled:dashboard.canMute&&dashboard.muted!==null&&dashboard.muted!==undefined},{action:'volume' as const,value:Math.min(100,(volume??0)+5),label:'Increase volume',Icon:Plus,enabled:dashboard.canVolume&&volume!==null&&volume<100}]
-  return <>
-    <foreignObject x={58} y={d.titleY} width={350} height={sansLine(d.titleSize)}><DeviceTap key={`${scope}:${dashboard.deviceId}:title`} className="dp-audio-device" style={{fontSize:d.titleSize,lineHeight:`${sansLine(d.titleSize)}px`,color:colorHex(d.mutedColor)}} label={`Choose ${scope} device`} disabled={!viewValid} onActivate={open} onSwipe={onSwipe}>{scope==='input'?'Input':'Output'}</DeviceTap></foreignObject>
-    <foreignObject x={33} y={d.valueY} width={400} height={pixelLine(d.valueSize)}><DeviceTap key={`${scope}:${dashboard.deviceId}:value`} className="dp-audio-device dp-module-pixel" style={{fontSize:d.valueSize,lineHeight:`${pixelLine(d.valueSize)}px`,color:colorHex(d.textColor)}} label={`Choose ${scope} device. Volume ${volume===null?'unavailable':`${volume} percent`}`} disabled={!viewValid} onActivate={open} onSwipe={onSwipe}>{volume===null?'—':`${volume}%`}</DeviceTap></foreignObject>
-    <foreignObject x={58} y={d.deviceY} width={350} height={sansLine(d.deviceSize)}><DeviceTap key={`${scope}:${dashboard.deviceId}:device`} className="dp-audio-device" style={{fontSize:d.deviceSize,lineHeight:`${sansLine(d.deviceSize)}px`,color:colorHex(d.mutedColor)}} label={`Choose ${scope} device. Current device: ${dashboard.deviceName||'none'}`} disabled={!viewValid} onActivate={open} onSwipe={onSwipe}>{wireText(dashboard.deviceName||'No audio device',64)}</DeviceTap></foreignObject>
-    {buttons.map(({action,value,label,Icon,enabled},index)=><foreignObject key={label} x={233+(index-1)*(d.controlSize+d.gap)-d.controlSize/2} y={d.controlsY} width={d.controlSize} height={d.controlSize}>
-      <button className="dp-audio-control" style={{width:d.controlSize,height:d.controlSize,color:colorHex(d.textColor)}} aria-label={`${label} ${scope}`} aria-pressed={action==='mute'?dashboard.muted===true:undefined} disabled={!valid||!enabled} onPointerDown={event=>event.stopPropagation()} onPointerUp={event=>event.stopPropagation()} onClick={event=>{event.stopPropagation();if(valid)onControl!({scope,deviceId:dashboard.deviceId!,action,value})}}><Icon size={d.controlSize*28/44}/></button>
-    </foreignObject>)}
-  </>
+function AudioDashboard({
+  dashboard,
+  d,
+  pending,
+  onControl,
+  onView,
+  onSwipe,
+}: {
+  dashboard: Dashboard
+  d: DesignValues
+  pending?: boolean
+  onControl?: (request: AudioControlRequest) => void
+  onView?: (request: AudioViewRequest) => void
+  onSwipe: (x: number, y: number) => void
+}) {
+  const scope = dashboard.scope || 'output'
+
+  const volume =
+    typeof dashboard.volume === 'number' && Number.isFinite(dashboard.volume)
+      ? Math.max(0, Math.min(100, Math.round(dashboard.volume)))
+      : null
+
+  const valid = dashboard.deviceId !== undefined && !!onControl && !pending
+  const viewValid = dashboard.deviceId !== undefined && !!onView && !pending
+
+  const open = () => {
+    if (viewValid) {
+      onView!({ open: true, scope, deviceId: dashboard.deviceId! })
+    }
+  }
+
+  if (dashboard.pickerOpen) {
+    return (
+      <>
+        {(dashboard.devices || []).slice(0, 3).map((device, index) => (
+          <foreignObject
+            key={`${scope}:${dashboard.deviceId}:${device.id}`}
+            x={63}
+            y={135 + 68 * index}
+            width={340}
+            height={60}
+          >
+            <DeviceTap
+              className="dp-audio-picker-row"
+              style={{ color: colorHex(d.textColor) }}
+              label={`${device.name}${device.active ? ', active device' : ''}`}
+              pressed={device.active}
+              disabled={!valid}
+              onSwipe={onSwipe}
+              onActivate={() => {
+                if (valid) {
+                  onControl!({
+                    scope,
+                    deviceId: dashboard.deviceId!,
+                    action: 'device',
+                    value: device.id,
+                  })
+                }
+              }}
+            >
+              <span className="dp-audio-picker-check" aria-hidden="true">
+                {device.active && <Check size={24} />}
+              </span>
+              <span className="dp-audio-picker-name">{wireText(device.name, 96)}</span>
+            </DeviceTap>
+          </foreignObject>
+        ))}
+
+        {!dashboard.devices?.length && (
+          <ModuleLabel
+            x={63}
+            y={220}
+            width={340}
+            align="center"
+            size={22}
+            color={colorHex(d.mutedColor)}
+          >
+            No devices available
+          </ModuleLabel>
+        )}
+
+        {(dashboard.pageCount ?? 1) > 1 && (
+          <ModuleLabel
+            x={133}
+            y={d.controlsY + d.controlSize / 2 - sansLine(16) / 2}
+            width={200}
+            align="center"
+            size={16}
+            mono
+            color={colorHex(d.mutedColor)}
+          >
+            {String((dashboard.pageIndex ?? 0) + 1).padStart(
+              String(dashboard.pageCount).length,
+              '\u00a0',
+            )}{' '}
+            / {dashboard.pageCount}
+          </ModuleLabel>
+        )}
+      </>
+    )
+  }
+
+  const buttons = [
+    {
+      action: 'volume' as const,
+      value: Math.max(0, (volume ?? 0) - 5),
+      label: 'Decrease volume',
+      Icon: Minus,
+      enabled: dashboard.canVolume && volume !== null && volume > 0,
+    },
+
+    {
+      action: 'mute' as const,
+      value: !dashboard.muted,
+      label: dashboard.muted ? 'Unmute' : 'Mute',
+      Icon:
+        scope === 'input' ? (dashboard.muted ? MicOff : Mic) : dashboard.muted ? VolumeX : Volume2,
+      enabled: dashboard.canMute && dashboard.muted !== null && dashboard.muted !== undefined,
+    },
+
+    {
+      action: 'volume' as const,
+      value: Math.min(100, (volume ?? 0) + 5),
+      label: 'Increase volume',
+      Icon: Plus,
+      enabled: dashboard.canVolume && volume !== null && volume < 100,
+    },
+  ]
+
+  return (
+    <>
+      <foreignObject x={58} y={d.titleY} width={350} height={sansLine(d.titleSize)}>
+        <DeviceTap
+          key={`${scope}:${dashboard.deviceId}:title`}
+          className="dp-audio-device"
+          style={{
+            fontSize: d.titleSize,
+            lineHeight: `${sansLine(d.titleSize)}px`,
+            color: colorHex(d.mutedColor),
+          }}
+          label={`Choose ${scope} device`}
+          disabled={!viewValid}
+          onActivate={open}
+          onSwipe={onSwipe}
+        >
+          {scope === 'input' ? 'Input' : 'Output'}
+        </DeviceTap>
+      </foreignObject>
+      <foreignObject x={33} y={d.valueY} width={400} height={pixelLine(d.valueSize)}>
+        <DeviceTap
+          key={`${scope}:${dashboard.deviceId}:value`}
+          className="dp-audio-device dp-module-pixel"
+          style={{
+            fontSize: d.valueSize,
+            lineHeight: `${pixelLine(d.valueSize)}px`,
+            color: colorHex(d.textColor),
+          }}
+          label={`Choose ${scope} device. Volume ${volume === null ? 'unavailable' : `${volume} percent`}`}
+          disabled={!viewValid}
+          onActivate={open}
+          onSwipe={onSwipe}
+        >
+          {volume === null ? '—' : `${volume}%`}
+        </DeviceTap>
+      </foreignObject>
+      <foreignObject x={58} y={d.deviceY} width={350} height={sansLine(d.deviceSize)}>
+        <DeviceTap
+          key={`${scope}:${dashboard.deviceId}:device`}
+          className="dp-audio-device"
+          style={{
+            fontSize: d.deviceSize,
+            lineHeight: `${sansLine(d.deviceSize)}px`,
+            color: colorHex(d.mutedColor),
+          }}
+          label={`Choose ${scope} device. Current device: ${dashboard.deviceName || 'none'}`}
+          disabled={!viewValid}
+          onActivate={open}
+          onSwipe={onSwipe}
+        >
+          {wireText(dashboard.deviceName || 'No audio device', 64)}
+        </DeviceTap>
+      </foreignObject>
+      {buttons.map(({ action, value, label, Icon, enabled }, index) => (
+        <foreignObject
+          key={label}
+          x={233 + (index - 1) * (d.controlSize + d.gap) - d.controlSize / 2}
+          y={d.controlsY}
+          width={d.controlSize}
+          height={d.controlSize}
+        >
+          <button
+            type="button"
+            className="dp-audio-control"
+            style={{ width: d.controlSize, height: d.controlSize, color: colorHex(d.textColor) }}
+            aria-label={`${label} ${scope}`}
+            aria-pressed={action === 'mute' ? dashboard.muted === true : undefined}
+            disabled={!valid || !enabled}
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation()
+
+              if (valid) {
+                onControl!({ scope, deviceId: dashboard.deviceId!, action, value })
+              }
+            }}
+          >
+            <Icon size={(d.controlSize * 28) / 44} />
+          </button>
+        </foreignObject>
+      ))}
+    </>
+  )
 }
 
-function ModuleDashboard({ module, dashboard, screenShape, online, animationMs, reduced, showCardBackgrounds, design, onAudioControl, onAudioView, onRoonControl, onRoonView, onOpenCard, onSpeedDialRun, onSwipe, pending }: { screenShape:'round'|'rectangular';onSpeedDialRun?:(request:SpeedDialRunRequest)=>void; onAudioView?:(request:AudioViewRequest)=>void; onAudioControl?:(request:AudioControlRequest)=>void; onRoonView?:(expanded:boolean)=>void; onRoonControl?:(action:string,player?:PlayerId)=>void; onOpenCard?:(request:OpenCardRequest)=>void; onSwipe:(x:number,y:number)=>void; pending?:boolean; module: 'usage' | 'hey' | 'clock' | 'roon' | 'audio' | 'speedDial'; dashboard?: Dashboard; online: boolean; animationMs: number; reduced: boolean; showCardBackgrounds: boolean; design?:Partial<Designs> }) {
-  const d=designFor(design,module)
+function ModuleDashboard({
+  module,
+  dashboard,
+  screenShape,
+  online,
+  animationMs,
+  reduced,
+  showCardBackgrounds,
+  design,
+  onAudioControl,
+  onAudioView,
+  onRoonControl,
+  onRoonView,
+  onOpenCard,
+  onSpeedDialRun,
+  onSwipe,
+  pending,
+}: {
+  screenShape: 'round' | 'rectangular'
+  onSpeedDialRun?: (request: SpeedDialRunRequest) => void
+  onAudioView?: (request: AudioViewRequest) => void
+  onAudioControl?: (request: AudioControlRequest) => void
+  onRoonView?: (expanded: boolean) => void
+  onRoonControl?: (action: string, player?: PlayerId) => void
+  onOpenCard?: (request: OpenCardRequest) => void
+  onSwipe: (x: number, y: number) => void
+  pending?: boolean
+  module: 'usage' | 'hey' | 'clock' | 'roon' | 'audio' | 'speedDial'
+  dashboard?: Dashboard
+  online: boolean
+  animationMs: number
+  reduced: boolean
+  showCardBackgrounds: boolean
+  design?: Partial<Designs>
+}) {
+  const d = designFor(design, module)
   const title = wireText(dashboard?.title || moduleNames[module], 32)
   const ready = online && dashboard?.status === 'ready'
-  const errorTitle = !online ? 'Disconnected' : ({
-    loading: 'Connecting', auth: 'Sign in needed', error: 'Could not refresh',
-  } as Record<string, string>)[dashboard?.status ?? ''] || 'Not connected'
-  const detail = wireText(!online ? 'Reconnect the desktop bridge' : dashboard?.status === 'loading' ? moduleNames[module] : dashboard?.detail || 'Set up this module in the playground')
+
+  const errorTitle = !online
+    ? 'Disconnected'
+    : (
+        {
+          loading: 'Connecting',
+          auth: 'Sign in needed',
+          error: 'Could not refresh',
+        } as Record<string, string>
+      )[dashboard?.status ?? ''] || 'Not connected'
+
+  const detail = wireText(
+    !online
+      ? 'Reconnect the desktop bridge'
+      : dashboard?.status === 'loading'
+        ? moduleNames[module]
+        : dashboard?.detail || 'Set up this module in the playground',
+  )
+
   const usageWindows = [dashboard?.primary, dashboard?.secondary]
-    .map((metric, index) => ({ metric, slot:index, fallback: index ? 'Weekly' : 'Session' }))
-    .filter(({ metric }) => metric && (metric.label || metric.reset || Number.isFinite(metric.remaining)))
+    .map((metric, index) => ({ metric, slot: index, fallback: index ? 'Weekly' : 'Session' }))
+    .filter(
+      ({ metric }) => metric && (metric.label || metric.reset || Number.isFinite(metric.remaining)),
+    )
+
   const mailItems = dashboard?.items?.slice(0, d.rows) ?? []
 
-  return <svg className="dp-module-screen" viewBox="0 0 466 466" role={module==='clock'?'img':'group'} aria-label={module === 'clock' && ready ? `Clock, ${dashboard?.time}, ${dashboard?.weekday || ''}` : `${title} ${module === 'usage' ? 'usage' : module === 'hey' ? 'mail' : module === 'roon' ? 'music' : module === 'audio' ? 'audio' : module === 'speedDial' ? 'Speed Dial' : 'clock'} dashboard`}>
-    {ready && module === 'speedDial' && <SpeedDialDashboard dashboard={dashboard!} screenShape={screenShape} d={d} pending={pending} onRun={onSpeedDialRun} onSwipe={onSwipe}/>}
-    {ready && module === 'audio' && <AudioDashboard dashboard={dashboard!} d={d} pending={pending} onControl={onAudioControl} onView={onAudioView} onSwipe={onSwipe}/>}
-    {ready && module === 'roon' && <RoonDashboard dashboard={dashboard!} d={d} reduced={reduced} pending={pending} onControl={onRoonControl} onView={onRoonView} onSwipe={onSwipe}/>}
-    {ready && module === 'clock' && <>
-      <foreignObject x={d.x} y={d.y} width={d.width} height={pixelLine(d.timeSize)}>
-        <div className="dp-clock-time" style={{fontSize:d.timeSize,lineHeight:`${pixelLine(d.timeSize)}px`,textAlign:(['left','center','right'] as const)[d.align],color:colorHex(d.textColor)}}>{dashboard?.time?.split('').map((char,index)=><span key={index} className={char===':'&&dashboard.blinkSeparator&&!reduced?'dp-clock-blink':undefined}>{char}</span>)}</div>
-      </foreignObject>
-      {dashboard?.weekday && <ModuleLabel x={d.x} y={d.dayY} width={d.width} size={d.daySize} color={colorHex(d.mutedColor)} align={(['left','center','right'] as const)[d.align]}>{dashboard.weekday}</ModuleLabel>}
-    </>}
-    {ready && module === 'usage' && <>
-      {usageWindows.map(({ metric, fallback, slot }, index) => <UsageCard key={fallback} metric={metric}
-        d={d} y={(usageWindows.length===1?158:(showCardBackgrounds?75:83)+index*(d.height+(showCardBackgrounds?24:8)+d.rowGap))+d.offsetY} fallback={fallback} showBackground={showCardBackgrounds}
-        action={{request:dashboard?.openToken?{module:'usage',index:slot,token:dashboard.openToken}:undefined,label:`Open ${metric?.provider || 'provider'} ${metric?.label || fallback} usage in your browser`,disabled:!!pending||!metric?.openable,onOpen:onOpenCard,onSwipe}} />)}
-    </>}
-    {ready && module === 'hey' && <>
-      {mailItems.length === 0 && <ModuleLabel x={73} y={205} width={320} align="center">{dashboard?.detail || 'You are all caught up'}</ModuleLabel>}
-      {mailItems.map((item, index) => {
-        const y = d.y + index * (d.height+d.gap)
-        const top=Math.min(0,d.senderY,d.subjectY)
-        const bottom=Math.max(d.height,d.senderY+sansLine(d.senderSize),d.subjectY+d.lines*sansLine(d.subjectSize))
-        return <g key={index}>
-          <rect x={d.x} y={y} width={d.width} height={d.height} rx={d.radius} fill={showCardBackgrounds ? colorHex(d.cardColor) : 'none'} />
-          <ModuleLabel x={d.x+d.padding} y={y+d.senderY} width={d.width-2*d.padding} size={d.senderSize} color={colorHex(d.textColor)}>{item.sender}</ModuleLabel>
-          <ModuleLabel x={d.x+d.padding} y={y+d.subjectY} width={d.width-2*d.padding} size={d.subjectSize} color={colorHex(d.mutedColor)} lines={d.lines} truncate>{item.subject}</ModuleLabel>
-          <CardHit x={d.x} y={y+top} width={d.width} height={bottom-top} radius={d.radius}
-            request={dashboard?.openToken?{module:'hey',index,token:dashboard.openToken}:undefined} label={`Open email from ${item.sender}: ${item.subject}`} disabled={!!pending||!item.openable} onOpen={onOpenCard} onSwipe={onSwipe}/>
-        </g>
-      })}
-    </>}
-    {ready && module !== 'clock' && dashboard?.refreshing && <CheckingIndicator animationMs={animationMs} reduced={reduced} color={d.mutedColor} foreground={d.textColor} />}
-    {!ready && <>
-      <ModuleLabel x={73} y={205} width={320} align="center">{errorTitle}</ModuleLabel>
-      <ModuleLabel x={83} y={240} width={300} small muted align="center" lines={2}>{detail}</ModuleLabel>
-    </>}
-  </svg>
+  return (
+    <svg
+      className="dp-module-screen"
+      viewBox="0 0 466 466"
+      role={module === 'clock' ? 'img' : 'group'}
+      aria-label={
+        module === 'clock' && ready
+          ? `Clock, ${dashboard?.time}, ${dashboard?.weekday || ''}`
+          : `${title} ${module === 'usage' ? 'usage' : module === 'hey' ? 'mail' : module === 'roon' ? 'music' : module === 'audio' ? 'audio' : module === 'speedDial' ? 'Speed Dial' : 'clock'} dashboard`
+      }
+    >
+      {ready && module === 'speedDial' && (
+        <SpeedDialDashboard
+          dashboard={dashboard!}
+          screenShape={screenShape}
+          d={d}
+          pending={pending}
+          onRun={onSpeedDialRun}
+          onSwipe={onSwipe}
+        />
+      )}
+
+      {ready && module === 'audio' && (
+        <AudioDashboard
+          dashboard={dashboard!}
+          d={d}
+          pending={pending}
+          onControl={onAudioControl}
+          onView={onAudioView}
+          onSwipe={onSwipe}
+        />
+      )}
+
+      {ready && module === 'roon' && (
+        <RoonDashboard
+          dashboard={dashboard!}
+          d={d}
+          reduced={reduced}
+          pending={pending}
+          onControl={onRoonControl}
+          onView={onRoonView}
+          onSwipe={onSwipe}
+        />
+      )}
+
+      {ready && module === 'clock' && (
+        <>
+          <foreignObject x={d.x} y={d.y} width={d.width} height={pixelLine(d.timeSize)}>
+            <div
+              className="dp-clock-time"
+              style={{
+                fontSize: d.timeSize,
+                lineHeight: `${pixelLine(d.timeSize)}px`,
+                textAlign: (['left', 'center', 'right'] as const)[d.align],
+                color: colorHex(d.textColor),
+              }}
+            >
+              {dashboard?.time?.split('').map((char, index) => (
+                <span
+                  // biome-ignore lint/suspicious/noArrayIndexKey: Clock positions stay fixed as their digits change.
+                  key={index}
+                  className={
+                    char === ':' && dashboard.blinkSeparator && !reduced
+                      ? 'dp-clock-blink'
+                      : undefined
+                  }
+                >
+                  {char}
+                </span>
+              ))}
+            </div>
+          </foreignObject>
+          {dashboard?.weekday && (
+            <ModuleLabel
+              x={d.x}
+              y={d.dayY}
+              width={d.width}
+              size={d.daySize}
+              color={colorHex(d.mutedColor)}
+              align={(['left', 'center', 'right'] as const)[d.align]}
+            >
+              {dashboard.weekday}
+            </ModuleLabel>
+          )}
+        </>
+      )}
+
+      {ready &&
+        module === 'usage' &&
+        usageWindows.map(({ metric, fallback, slot }, index) => (
+          <UsageCard
+            key={fallback}
+            metric={metric}
+            d={d}
+            y={
+              (usageWindows.length === 1
+                ? 158
+                : (showCardBackgrounds ? 75 : 83) +
+                  index * (d.height + (showCardBackgrounds ? 24 : 8) + d.rowGap)) + d.offsetY
+            }
+            fallback={fallback}
+            showBackground={showCardBackgrounds}
+            action={{
+              request: dashboard?.openToken
+                ? { module: 'usage', index: slot, token: dashboard.openToken }
+                : undefined,
+              label: `Open ${metric?.provider || 'provider'} ${metric?.label || fallback} usage in your browser`,
+              disabled: !!pending || !metric?.openable,
+              onOpen: onOpenCard,
+              onSwipe,
+            }}
+          />
+        ))}
+
+      {ready && module === 'hey' && (
+        <>
+          {mailItems.length === 0 && (
+            <ModuleLabel x={73} y={205} width={320} align="center">
+              {dashboard?.detail || 'You are all caught up'}
+            </ModuleLabel>
+          )}
+
+          {mailItems.map((item, index) => {
+            const y = d.y + index * (d.height + d.gap)
+            const top = Math.min(0, d.senderY, d.subjectY)
+
+            const bottom = Math.max(
+              d.height,
+              d.senderY + sansLine(d.senderSize),
+              d.subjectY + d.lines * sansLine(d.subjectSize),
+            )
+
+            return (
+              // biome-ignore lint/suspicious/noArrayIndexKey: Device frames omit mail IDs; card taps validate their frame token.
+              <g key={index}>
+                <rect
+                  x={d.x}
+                  y={y}
+                  width={d.width}
+                  height={d.height}
+                  rx={d.radius}
+                  fill={showCardBackgrounds ? colorHex(d.cardColor) : 'none'}
+                />
+                <ModuleLabel
+                  x={d.x + d.padding}
+                  y={y + d.senderY}
+                  width={d.width - 2 * d.padding}
+                  size={d.senderSize}
+                  color={colorHex(d.textColor)}
+                >
+                  {item.sender}
+                </ModuleLabel>
+                <ModuleLabel
+                  x={d.x + d.padding}
+                  y={y + d.subjectY}
+                  width={d.width - 2 * d.padding}
+                  size={d.subjectSize}
+                  color={colorHex(d.mutedColor)}
+                  lines={d.lines}
+                  truncate
+                >
+                  {item.subject}
+                </ModuleLabel>
+                <CardHit
+                  x={d.x}
+                  y={y + top}
+                  width={d.width}
+                  height={bottom - top}
+                  radius={d.radius}
+                  request={
+                    dashboard?.openToken
+                      ? { module: 'hey', index, token: dashboard.openToken }
+                      : undefined
+                  }
+                  label={`Open email from ${item.sender}: ${item.subject}`}
+                  disabled={!!pending || !item.openable}
+                  onOpen={onOpenCard}
+                  onSwipe={onSwipe}
+                />
+              </g>
+            )
+          })}
+        </>
+      )}
+
+      {ready && module !== 'clock' && dashboard?.refreshing && (
+        <CheckingIndicator
+          animationMs={animationMs}
+          reduced={reduced}
+          color={d.mutedColor}
+          foreground={d.textColor}
+        />
+      )}
+
+      {!ready && (
+        <>
+          <ModuleLabel x={73} y={205} width={320} align="center">
+            {errorTitle}
+          </ModuleLabel>
+          <ModuleLabel x={83} y={240} width={300} small muted align="center" lines={2}>
+            {detail}
+          </ModuleLabel>
+        </>
+      )}
+    </svg>
+  )
 }
 
 function Hint({ text, children }: { text: string; children: ReactElement }) {
-  return <Tooltip><TooltipTrigger render={children} /><TooltipContent side="bottom">{text}</TooltipContent></Tooltip>
+  return (
+    <Tooltip>
+      <TooltipTrigger render={children} />
+      <TooltipContent side="bottom">{text}</TooltipContent>
+    </Tooltip>
+  )
 }
 
-export default function DevicePreview({ snapshot, localAnimation, localReplay = 0, onModule, onLive, onUsagePage, onHeyPage, onOpenCard, onRoonControl, onRoonView, onRoonPage, onAudioControl, onAudioPage, onAudioView, onSpeedDialRun, onSpeedDialPage, pending = false, online = false }: DevicePreviewProps) {
+export default function DevicePreview({
+  snapshot,
+  localAnimation,
+  localReplay = 0,
+  onModule,
+  onLive,
+  onUsagePage,
+  onHeyPage,
+  onOpenCard,
+  onRoonControl,
+  onRoonView,
+  onRoonPage,
+  onAudioControl,
+  onAudioPage,
+  onAudioView,
+  onSpeedDialRun,
+  onSpeedDialPage,
+  pending = false,
+  online = false,
+}: DevicePreviewProps) {
   const panel = previewDisplay(snapshot?.device.profile)
   const canvasSide = Math.min(panel.width, panel.height)
   const titleId = useId()
   const local = localAnimation !== undefined && !snapshot?.attention?.active
-  const localClock = useMemo(() => ({ changedAt: Date.now(), animationMs: performance.now() }), [localAnimation, localReplay])
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Selecting or replaying an animation resets its local clock.
+  const localClock = useMemo(
+    () => ({ changedAt: Date.now(), animationMs: performance.now() }),
+    [localAnimation, localReplay],
+  )
+
   const attention = !local && online ? snapshot?.attention?.active : null
-  const module: ModuleId = local ? 'face' : snapshot && moduleIds.includes(snapshot.module) ? snapshot.module : 'face'
-  const enabled = snapshot?.settings.device.moduleOrder.filter((id): id is ModuleId =>
-    moduleIds.includes(id as ModuleId) && snapshot.settings.modules[id as ModuleId].enabled) ?? ['face']
+
+  const module: ModuleId = local
+    ? 'face'
+    : snapshot && moduleIds.includes(snapshot.module)
+      ? snapshot.module
+      : 'face'
+
+  const enabled = snapshot?.settings.device.moduleOrder.filter(
+    (id): id is ModuleId =>
+      moduleIds.includes(id as ModuleId) && snapshot.settings.modules[id as ModuleId].enabled,
+  ) ?? ['face']
+
   const moduleIndex = enabled.indexOf(module)
   const display = snapshot?.display
-  const semanticState = local ? localAnimation || 'idle' : online ? display?.state || 'disconnected' : 'disconnected'
-  const pose = local ? semanticState : online ? display?.expression || semanticState : 'disconnected'
-  const caption = attention ? attention.title : wireText(local ? animationName(localAnimation || 'idle') : online ? display?.label || 'Connecting' : 'Disconnected')
-  const subtitle = attention ? attention.description : wireText(local ? 'Preview' : online ? display?.name || '' : 'Waiting for host')
+
+  const semanticState = local
+    ? localAnimation || 'idle'
+    : online
+      ? display?.state || 'disconnected'
+      : 'disconnected'
+
+  const pose = local
+    ? semanticState
+    : online
+      ? display?.expression || semanticState
+      : 'disconnected'
+
+  const caption = attention
+    ? attention.title
+    : wireText(
+        local
+          ? animationName(localAnimation || 'idle')
+          : online
+            ? display?.label || 'Connecting'
+            : 'Disconnected',
+      )
+
+  const subtitle = attention
+    ? attention.description
+    : wireText(local ? 'Preview' : online ? display?.name || '' : 'Waiting for host')
+
   const shimmer = semanticState === 'working'
   const nameShimmer = !local && online && display?.nameShimmer === true
-  const forcedPose = Boolean(snapshot && (snapshot.expression !== null || snapshot.display.expression))
+
+  const forcedPose = Boolean(
+    snapshot && (snapshot.expression !== null || snapshot.display.expression),
+  )
+
   const gap = snapshot?.layout.textGap ?? 8
   const pointer = snapshot?.pointer
-  const look = online && pointer?.enabled && pointer.status === 'active' ? { x: pointer.x, y: pointer.y } : null
+
+  const look =
+    online && pointer?.enabled && pointer.status === 'active'
+      ? { x: pointer.x, y: pointer.y }
+      : null
+
   const showNavigation = snapshot?.settings.device.showModuleNavigation === true
   const swipeEnabled = snapshot?.settings.device.swipeEnabled ?? true
   const canSwitch = !attention && !pending && online && enabled.length > 1
-  const hasPages = !attention && online && (module === 'speedDial' ? !!onSpeedDialPage && (display?.dashboard?.pageCount ?? 1)>1 : module === 'audio' ? !!onAudioPage && (display?.dashboard?.pageCount ?? 2)>1 : module === 'roon' ? !!onRoonPage && (display?.dashboard?.pageCount ?? 1)>1 : (module === 'usage' || module === 'hey') && display?.dashboard?.status === 'ready' && (display.dashboard.pageCount ?? 1)>1)
+
+  const hasPages =
+    !attention &&
+    online &&
+    (module === 'speedDial'
+      ? !!onSpeedDialPage && (display?.dashboard?.pageCount ?? 1) > 1
+      : module === 'audio'
+        ? !!onAudioPage && (display?.dashboard?.pageCount ?? 2) > 1
+        : module === 'roon'
+          ? !!onRoonPage && (display?.dashboard?.pageCount ?? 1) > 1
+          : (module === 'usage' || module === 'hey') &&
+            display?.dashboard?.status === 'ready' &&
+            (display.dashboard.pageCount ?? 1) > 1)
+
   const canPage = !pending && hasPages
-  const changePage = (direction: number) => module === 'speedDial' ? onSpeedDialPage?.(direction) : module === 'audio' ? onAudioPage?.(direction) : module === 'roon' ? onRoonPage?.(direction) : module === 'hey' ? onHeyPage(direction) : onUsagePage(direction)
+
+  const changePage = (direction: number) =>
+    module === 'speedDial'
+      ? onSpeedDialPage?.(direction)
+      : module === 'audio'
+        ? onAudioPage?.(direction)
+        : module === 'roon'
+          ? onRoonPage?.(direction)
+          : module === 'hey'
+            ? onHeyPage(direction)
+            : onUsagePage(direction)
+
   const showLive = !attention && (local || Boolean(snapshot && snapshot.expression !== null))
+
   const gesture = useRef<{ id: number; x: number; y: number; at: number } | null>(null)
-  const palette=snapshot?.deviceAppearance?.palette || devicePaletteDefaults[snapshot?.settings.deviceAppearance?.mode==='light'?'light':'dark']
-  const resolvedDesign=resolveDesign(snapshot?.settings.design || defaultDesign,palette)
-  const faceDesign=designFor(resolvedDesign,'face')
-  const style = { '--device-success':colorHex(palette.success),'--device-danger':colorHex(palette.danger),'--device-background':colorHex(palette.background),'--device-foreground':colorHex(palette.foreground),'--device-muted':colorHex(palette.muted),'--device-surface':colorHex(palette.surface),'--device-accent':colorHex(palette.accent),'--device-track':colorHex(palette.track), '--status-top':395-27-gap+faceDesign.titleOffset, '--title-width':faceDesign.titleWidth, '--title-size':faceDesign.titleSize, '--title-line':sansLine(faceDesign.titleSize), '--title-color':colorHex(faceDesign.textColor), '--name-top':faceDesign.nameY, '--name-width':faceDesign.nameWidth, '--name-size':faceDesign.nameSize, '--name-line':sansLine(faceDesign.nameSize), '--name-color':colorHex(faceDesign.mutedColor), touchAction:canPage?'none':'pan-y' } as CSSProperties
+
+  const palette =
+    snapshot?.deviceAppearance?.palette ||
+    devicePaletteDefaults[snapshot?.settings.deviceAppearance?.mode === 'light' ? 'light' : 'dark']
+
+  const resolvedDesign = resolveDesign(snapshot?.settings.design || defaultDesign, palette)
+  const faceDesign = designFor(resolvedDesign, 'face')
+
+  const style = {
+    '--device-success': colorHex(palette.success),
+    '--device-danger': colorHex(palette.danger),
+    '--device-background': colorHex(palette.background),
+    '--device-foreground': colorHex(palette.foreground),
+    '--device-muted': colorHex(palette.muted),
+    '--device-surface': colorHex(palette.surface),
+    '--device-accent': colorHex(palette.accent),
+    '--device-track': colorHex(palette.track),
+    '--status-top': 395 - 27 - gap + faceDesign.titleOffset,
+    '--title-width': faceDesign.titleWidth,
+    '--title-size': faceDesign.titleSize,
+    '--title-line': sansLine(faceDesign.titleSize),
+    '--title-color': colorHex(faceDesign.textColor),
+    '--name-top': faceDesign.nameY,
+    '--name-width': faceDesign.nameWidth,
+    '--name-size': faceDesign.nameSize,
+    '--name-line': sansLine(faceDesign.nameSize),
+    '--name-color': colorHex(faceDesign.mutedColor),
+    touchAction: canPage ? 'none' : 'pan-y',
+  } as CSSProperties
 
   const switchModule = (direction: number) => {
-    if (!canSwitch) return
+    if (!canSwitch) {
+      return
+    }
+
     const current = moduleIndex < 0 ? enabled.indexOf(snapshot?.module || 'face') : moduleIndex
     onModule(enabled[(Math.max(0, current) + direction + enabled.length) % enabled.length]!)
   }
+
   const pointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if ((!canPage && !(swipeEnabled && canSwitch)) || !event.isPrimary || event.button !== 0) return
-    gesture.current = { id: event.pointerId, x: event.clientX, y: event.clientY, at: performance.now() }
+    if ((!canPage && !(swipeEnabled && canSwitch)) || !event.isPrimary || event.button !== 0) {
+      return
+    }
+
+    gesture.current = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      at: performance.now(),
+    }
     event.currentTarget.setPointerCapture(event.pointerId)
   }
-  const swipe = (x:number,y:number) => {
-    if (canPage && Math.abs(y) >= 55 && Math.abs(y) > Math.abs(x) * 1.25) changePage(y < 0 ? 1 : -1)
-    else if (swipeEnabled && Math.abs(x) >= 70 && Math.abs(x) > Math.abs(y) * 1.25) switchModule(x < 0 ? 1 : -1)
+
+  const swipe = (x: number, y: number) => {
+    if (canPage && Math.abs(y) >= 55 && Math.abs(y) > Math.abs(x) * 1.25) {
+      changePage(y < 0 ? 1 : -1)
+    } else if (swipeEnabled && Math.abs(x) >= 70 && Math.abs(x) > Math.abs(y) * 1.25) {
+      switchModule(x < 0 ? 1 : -1)
+    }
   }
+
   const pointerUp = (event: PointerEvent<HTMLDivElement>) => {
     const start = gesture.current
     gesture.current = null
-    if (!start || start.id !== event.pointerId || performance.now() - start.at > 1500) return
+
+    if (!start || start.id !== event.pointerId || performance.now() - start.at > 1500) {
+      return
+    }
+
     const x = event.clientX - start.x
     const y = event.clientY - start.y
-    swipe(x,y)
+    swipe(x, y)
   }
 
-  return <section className="device-preview" aria-labelledby={titleId}>
-    <header className="dp-heading">
-      <h2 id={titleId}>Device preview</h2>
-    </header>
+  return (
+    <section className="device-preview" aria-labelledby={titleId}>
+      <header className="dp-heading">
+        <h2 id={titleId}>Device preview</h2>
+      </header>
 
-    <div className="dp-stage">
-      <div className="dp-hardware" data-shape={panel.shape} style={{aspectRatio:'auto'}} role="group" aria-label={local ? 'Local animation preview' : 'Device screen'}>
-        <div className="dp-display" data-shape={panel.shape} style={{aspectRatio:`${panel.width} / ${panel.height}`,background:colorHex(palette.background)}}>
-        <div className="device-screen" dir="ltr" style={{...style,position:'absolute',width:`${canvasSide/panel.width*100}%`,height:`${canvasSide/panel.height*100}%`,left:'50%',top:'50%',transform:'translate(-50%, -50%)',borderRadius:panel.shape==='round'?'50%':0}} tabIndex={hasPages?0:undefined}
-          aria-label={module==='speedDial'?'Speed Dial. Use the up and down arrow keys to browse buttons.':module==='clock'?'Clock':module==='audio'?(display?.dashboard?.pickerOpen?'Audio devices. Use the up and down arrow keys to browse devices.':'Audio. Use the up and down arrow keys to switch input and output.'):module==='roon'?`${display?.dashboard?.playerName||'Now Playing'}. Use the up and down arrow keys to switch players.`:module!=='face'?`${module==='hey'?'Mailbox list':'Usage cards'}. Use the up and down arrow keys to browse.`:undefined}
-          onKeyDown={event=>{if(canPage&&['ArrowDown','ArrowUp'].includes(event.key)){event.preventDefault();event.currentTarget.focus();changePage(event.key==='ArrowDown'?1:-1)}}}
-          onPointerDown={pointerDown} onPointerUp={pointerUp}
-          onPointerCancel={() => { gesture.current = null }} onLostPointerCapture={() => { gesture.current = null }}>
-          {attention?.detail ? null : module === 'face' ? <Face
-            palette={palette} backgroundColor={palette.background} foregroundColor={palette.foreground} faceScale={faceDesign.scale ?? 100} textColor={faceDesign.textColor} mutedColor={faceDesign.mutedColor} state={pose} statusLabel={shimmer ? caption : undefined} nameLabel={nameShimmer ? subtitle : undefined}
-            changedAt={local ? localClock.changedAt : snapshot?.changedAt ?? 0}
-            animationMs={local ? localClock.animationMs : snapshot?.animationMs ?? 0}
-            ageMs={local ? 0 : snapshot?.ageMs ?? 0}
-            reduced={snapshot?.settings.appearance.reducedMotion}
-            preview={local || forcedPose} look={look}
-          /> : <ModuleDashboard module={module} dashboard={display?.dashboard} screenShape={panel.shape} online={online}
-            animationMs={snapshot?.animationMs ?? 0} reduced={snapshot?.settings.appearance.reducedMotion ?? false}
-            showCardBackgrounds={snapshot?.settings.device.showCardBackgrounds === true} design={resolvedDesign} onAudioControl={onAudioControl} onAudioView={onAudioView} onRoonControl={onRoonControl} onRoonView={onRoonView} onOpenCard={onOpenCard} onSpeedDialRun={onSpeedDialRun} onSwipe={swipe} pending={pending} />}
-          {module === 'face' && !attention?.detail && !shimmer && <div className="screen-caption"><span>{caption}</span></div>}
-          {module === 'face' && !attention?.detail && !nameShimmer && <div className="screen-name">{subtitle}</div>}
-          {attention && <AttentionOverlay key={`${attention.id}:${attention.revision}`} request={attention} detail={attention.detail} pending={pending || !online}/>}
-          {!attention && showNavigation && enabled.length > 1 && <div className="dp-screen-pages" style={module==='speedDial'?{top:`${446/466*100}%`}:undefined} aria-hidden="true">
-            {enabled.map(id => <i key={id} data-active={id === module} />)}
-          </div>}
+      <div className="dp-stage">
+        <div
+          className="dp-hardware"
+          data-shape={panel.shape}
+          style={{ aspectRatio: 'auto' }}
+          role="group"
+          aria-label={local ? 'Local animation preview' : 'Device screen'}
+        >
+          <div
+            className="dp-display"
+            data-shape={panel.shape}
+            style={{
+              aspectRatio: `${panel.width} / ${panel.height}`,
+              background: colorHex(palette.background),
+            }}
+          >
+            <div
+              className="device-screen"
+              role="group"
+              dir="ltr"
+              style={{
+                ...style,
+                position: 'absolute',
+                width: `${(canvasSide / panel.width) * 100}%`,
+                height: `${(canvasSide / panel.height) * 100}%`,
+                left: '50%',
+                top: '50%',
+                transform: 'translate(-50%, -50%)',
+                borderRadius: panel.shape === 'round' ? '50%' : 0,
+              }}
+              tabIndex={hasPages ? 0 : undefined}
+              aria-label={
+                module === 'speedDial'
+                  ? 'Speed Dial. Use the up and down arrow keys to browse buttons.'
+                  : module === 'clock'
+                    ? 'Clock'
+                    : module === 'audio'
+                      ? display?.dashboard?.pickerOpen
+                        ? 'Audio devices. Use the up and down arrow keys to browse devices.'
+                        : 'Audio. Use the up and down arrow keys to switch input and output.'
+                      : module === 'roon'
+                        ? `${display?.dashboard?.playerName || 'Now Playing'}. Use the up and down arrow keys to switch players.`
+                        : module !== 'face'
+                          ? `${module === 'hey' ? 'Mailbox list' : 'Usage cards'}. Use the up and down arrow keys to browse.`
+                          : undefined
+              }
+              onKeyDown={(event) => {
+                if (canPage && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
+                  event.preventDefault()
+                  event.currentTarget.focus()
+                  changePage(event.key === 'ArrowDown' ? 1 : -1)
+                }
+              }}
+              onPointerDown={pointerDown}
+              onPointerUp={pointerUp}
+              onPointerCancel={() => {
+                gesture.current = null
+              }}
+              onLostPointerCapture={() => {
+                gesture.current = null
+              }}
+            >
+              {attention?.detail ? null : module === 'face' ? (
+                <Face
+                  palette={palette}
+                  backgroundColor={palette.background}
+                  foregroundColor={palette.foreground}
+                  faceScale={faceDesign.scale ?? 100}
+                  textColor={faceDesign.textColor}
+                  mutedColor={faceDesign.mutedColor}
+                  state={pose}
+                  statusLabel={shimmer ? caption : undefined}
+                  nameLabel={nameShimmer ? subtitle : undefined}
+                  changedAt={local ? localClock.changedAt : (snapshot?.changedAt ?? 0)}
+                  animationMs={local ? localClock.animationMs : (snapshot?.animationMs ?? 0)}
+                  ageMs={local ? 0 : (snapshot?.ageMs ?? 0)}
+                  reduced={snapshot?.settings.appearance.reducedMotion}
+                  preview={local || forcedPose}
+                  look={look}
+                />
+              ) : (
+                <ModuleDashboard
+                  module={module}
+                  dashboard={display?.dashboard}
+                  screenShape={panel.shape}
+                  online={online}
+                  animationMs={snapshot?.animationMs ?? 0}
+                  reduced={snapshot?.settings.appearance.reducedMotion ?? false}
+                  showCardBackgrounds={snapshot?.settings.device.showCardBackgrounds === true}
+                  design={resolvedDesign}
+                  onAudioControl={onAudioControl}
+                  onAudioView={onAudioView}
+                  onRoonControl={onRoonControl}
+                  onRoonView={onRoonView}
+                  onOpenCard={onOpenCard}
+                  onSpeedDialRun={onSpeedDialRun}
+                  onSwipe={swipe}
+                  pending={pending}
+                />
+              )}
+
+              {module === 'face' && !attention?.detail && !shimmer && (
+                <div className="screen-caption">
+                  <span>{caption}</span>
+                </div>
+              )}
+
+              {module === 'face' && !attention?.detail && !nameShimmer && (
+                <div className="screen-name">{subtitle}</div>
+              )}
+
+              {attention && (
+                <AttentionOverlay
+                  key={`${attention.id}:${attention.revision}`}
+                  request={attention}
+                  detail={attention.detail}
+                  pending={pending || !online}
+                />
+              )}
+
+              {!attention && showNavigation && enabled.length > 1 && (
+                <div
+                  className="dp-screen-pages"
+                  style={module === 'speedDial' ? { top: `${(446 / 466) * 100}%` } : undefined}
+                  aria-hidden="true"
+                >
+                  {enabled.map((id) => (
+                    <i key={id} data-active={id === module} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
+
+        <div className="dp-stage-meta">
+          <span className="dp-mode" data-local={local}>
+            {local ? <ScanFace aria-hidden="true" /> : <Radio aria-hidden="true" />}
+            {local ? 'Local preview' : 'Live device'}
+          </span>
+          <span className="dp-resolution">
+            {panel.width} x {panel.height}
+          </span>
         </div>
       </div>
-      <div className="dp-stage-meta">
-        <span className="dp-mode" data-local={local}>{local ? <ScanFace aria-hidden="true" /> : <Radio aria-hidden="true" />}{local ? 'Local preview' : 'Live device'}</span>
-        <span className="dp-resolution">{panel.width} x {panel.height}</span>
-      </div>
-    </div>
 
-    {showNavigation && <TooltipProvider delay={500}>
-      <div className="dp-module-controls" data-count={enabled.length} aria-label="Device modules">
-        <Hint text="Previous module"><Button variant="ghost" size="icon-sm" disabled={!canSwitch} aria-label="Previous module" onClick={() => switchModule(-1)}><ArrowLeft /></Button></Hint>
-        <div className="dp-module-pills">
-          {enabled.map(id => {
-            const Icon = moduleIcons[id]
-            return <Hint key={id} text={`Show ${moduleNames[id]} on the device`}>
-              <Button variant="ghost" size="sm" className="dp-module-pill" aria-label={`Show ${moduleNames[id]} on the device`}
-                aria-pressed={!local && id === module} disabled={pending || !online || !!attention}
-                onClick={() => { if (local || id !== module) onModule(id) }}>
-                <Icon aria-hidden="true" /><span>{shortNames[id]}</span>
+      {showNavigation && (
+        <TooltipProvider delay={500}>
+          <div
+            className="dp-module-controls"
+            role="group"
+            data-count={enabled.length}
+            aria-label="Device modules"
+          >
+            <Hint text="Previous module">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                disabled={!canSwitch}
+                aria-label="Previous module"
+                onClick={() => switchModule(-1)}
+              >
+                <ArrowLeft />
               </Button>
             </Hint>
-          })}
+            <div className="dp-module-pills">
+              {enabled.map((id) => {
+                const Icon = moduleIcons[id]
+
+                return (
+                  <Hint key={id} text={`Show ${moduleNames[id]} on the device`}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="dp-module-pill"
+                      aria-label={`Show ${moduleNames[id]} on the device`}
+                      aria-pressed={!local && id === module}
+                      disabled={pending || !online || !!attention}
+                      onClick={() => {
+                        if (local || id !== module) {
+                          onModule(id)
+                        }
+                      }}
+                    >
+                      <Icon aria-hidden="true" />
+                      <span>{shortNames[id]}</span>
+                    </Button>
+                  </Hint>
+                )
+              })}
+            </div>
+            <Hint text="Next module">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                disabled={!canSwitch}
+                aria-label="Next module"
+                onClick={() => switchModule(1)}
+              >
+                <ArrowRight />
+              </Button>
+            </Hint>
+          </div>
+        </TooltipProvider>
+      )}
+
+      {(showNavigation || showLive) && (
+        <div className="dp-bottom">
+          {(showNavigation || local) && (
+            <p>
+              {local
+                ? 'Only you can see this preview.'
+                : enabled.length > 1
+                  ? swipeEnabled
+                    ? 'Swipe the screen to switch modules.'
+                    : 'Choose a module above to switch.'
+                  : 'Add modules to make this device your own.'}
+            </p>
+          )}
+
+          {showLive && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onLive}
+              disabled={pending || (!local && !online)}
+            >
+              <RotateCcw data-icon="inline-start" />
+              Return to live
+            </Button>
+          )}
         </div>
-        <Hint text="Next module"><Button variant="ghost" size="icon-sm" disabled={!canSwitch} aria-label="Next module" onClick={() => switchModule(1)}><ArrowRight /></Button></Hint>
-      </div>
-    </TooltipProvider>}
-    {(showNavigation || showLive) && <div className="dp-bottom">
-      {(showNavigation || local) && <p>{local ? 'Only you can see this preview.' : enabled.length > 1 ? swipeEnabled ? 'Swipe the screen to switch modules.' : 'Choose a module above to switch.' : 'Add modules to make this device your own.'}</p>}
-      {showLive && <Button variant="outline" size="sm" onClick={onLive} disabled={pending || (!local && !online)}><RotateCcw data-icon="inline-start" />Return to live</Button>}
-    </div>}
-  </section>
+      )}
+    </section>
+  )
 }

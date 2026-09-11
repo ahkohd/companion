@@ -18,12 +18,16 @@ export type FaceProps = {
   look?: { x: number; y: number } | null
 }
 
-const seconds = (ms: number) => Number.isFinite(ms) ? Math.max(0, ms) / 1000 : 0
+const seconds = (ms: number) => (Number.isFinite(ms) ? Math.max(0, ms) / 1000 : 0)
+
 const color = (value: number) => `#${value.toString(16).padStart(6, '0')}`
 
 export function faceMode(input: FaceProps, wallTime: number): FaceState {
-  if (!input.preview && input.state === 'idle' && wallTime - input.changedAt >= 30_000) return 'sleep'
-  return FACE_STATES.includes(input.state as FaceState) ? input.state as FaceState : 'unknown'
+  if (!input.preview && input.state === 'idle' && wallTime - input.changedAt >= 30_000) {
+    return 'sleep'
+  }
+
+  return FACE_STATES.includes(input.state as FaceState) ? (input.state as FaceState) : 'unknown'
 }
 
 // Browser time advances between host snapshots. A host restart rebases existing
@@ -49,37 +53,52 @@ export class FaceTimeline {
   update(input: FaceProps, reduced: boolean, receivedAt: number, wallTime: number) {
     if (Number.isFinite(input.animationMs) && input.animationMs !== this.hostAnimationMs) {
       this.hostReceivedAt = receivedAt
+
       if (input.animationMs < this.hostAnimationMs - 100) {
         this.engine.rebaseClock(this.elapsed, seconds(input.animationMs))
         this.elapsed = seconds(input.animationMs)
       } else {
         this.elapsed = Math.max(this.elapsed, seconds(input.animationMs))
       }
+
       this.hostAnimationMs = Math.max(0, input.animationMs)
     }
+
     this.input = input
     this.reduced = reduced
     this.advance(receivedAt)
     this.engine.setState(faceMode(input, wallTime), this.elapsed, reduced)
     this.engine.setLook(input.look ?? null, this.elapsed, reduced)
-    if (reduced) this.engine.since = this.elapsed - .45
+
+    if (reduced) {
+      this.engine.since = this.elapsed - 0.45
+    }
+
     return this.sample()
   }
 
   tick(time: number, wallTime: number) {
     this.advance(time)
     this.engine.setState(faceMode(this.input, wallTime), this.elapsed, this.reduced)
+
     return this.sample()
   }
 
   private advance(time: number) {
     if (!this.reduced) {
-      this.elapsed = Math.max(this.elapsed, this.hostAnimationMs / 1000 + Math.max(0, time - this.hostReceivedAt) / 1000)
+      this.elapsed = Math.max(
+        this.elapsed,
+        this.hostAnimationMs / 1000 + Math.max(0, time - this.hostReceivedAt) / 1000,
+      )
     }
   }
 
   sample() {
-    const age = Math.max(0, this.elapsed - (seconds(this.input.animationMs) - seconds(this.input.ageMs)))
+    const age = Math.max(
+      0,
+      this.elapsed - (seconds(this.input.animationMs) - seconds(this.input.ageMs)),
+    )
+
     return {
       mode: this.engine.state,
       time: this.elapsed,

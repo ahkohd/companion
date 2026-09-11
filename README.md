@@ -253,12 +253,21 @@ pnpm dev
 
 This starts the bridge and Vite. Open [the development app](http://127.0.0.1:5173).
 
-Run the tests, type checks and production build:
+Format frontend source and organise imports:
+
+```sh
+pnpm format
+```
+
+Run formatting checks, linting, tests, type checks and the production build:
 
 ```sh
 pnpm check
 ```
 
+`pnpm format:check` checks formatting and imports without changing files. `pnpm lint` runs lint checks alone.
+Biome covers app-owned frontend files, including UI primitives, and leaves vendored code unchanged.
+CSS overrides, non-null assertions and existing ARIA containers remain allowed. Local hook exceptions explain intentional timing and revision guards.
 Native rendering tests require a C11 compiler available as `cc`.
 
 The app uses React, TypeScript, Vite, Tailwind CSS and shadcn/ui. Firmware uses ESP-IDF and LVGL. Lockfiles record dependency versions.

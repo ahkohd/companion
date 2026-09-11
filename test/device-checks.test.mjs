@@ -1,8 +1,12 @@
-import test from 'node:test';
-import { execFileSync } from 'node:child_process';
+import test from 'node:test'
+import { execFileSync } from 'node:child_process'
 
 test('hardware checks retain partial serial lines and wait for rendering with a deadline', () => {
-  execFileSync('python3', ['-c', String.raw`
+  execFileSync(
+    'python3',
+    [
+      '-c',
+      String.raw`
 import ast, json
 from pathlib import Path
 
@@ -71,5 +75,8 @@ for filename, receiver, renderer in [('check-device.py', 'receive_until', 'rende
         try: exec(code, scope)
         except AssertionError: pass
         else: raise AssertionError('An acknowledged invalid frame must fail the check')
-`], { stdio: 'pipe' });
-});
+`,
+    ],
+    { stdio: 'pipe' },
+  )
+})
