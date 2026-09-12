@@ -340,6 +340,8 @@ export interface StudioSnapshot {
     error: string | null
     lastAck?: number
     renderedModule?: string
+    dmaLargest?: number
+    internalFree?: number
     connection?: SerialConnectionState
   }
 

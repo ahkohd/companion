@@ -554,6 +554,53 @@ test('panel failures remain visible on healthy USB and clear only their own reco
   assert.equal(frames.length, writes, 'Panel diagnostics must not trigger serial writes')
 })
 
+test('memory diagnostics accept bounded counters without causing serial writes', () => {
+  const { store, link, frames } = setup()
+  const receive = (fields) =>
+    link.receive(JSON.stringify({ type: 'ack', v: 1, seq: store.seq, ...fields }) + '\n')
+
+  receive({ dma_largest: 4096, internal_free: 20000 })
+
+  assert.equal(store.device.dmaLargest, undefined)
+  assert.equal(store.device.internalFree, undefined)
+
+  link.receive(ready)
+  const writes = frames.length
+  receive({})
+
+  assert.equal(store.device.dmaLargest, undefined)
+  assert.equal(store.device.internalFree, undefined)
+
+  receive({ dma_largest: 4096, internal_free: 20000 })
+
+  assert.equal(store.device.dmaLargest, 4096)
+  assert.equal(store.device.internalFree, 20000)
+
+  for (const value of [undefined, null, -1, 1.5, 0x100000000, '4096', true, [], {}]) {
+    receive({ dma_largest: value, internal_free: value })
+
+    assert.equal(store.device.dmaLargest, 4096)
+    assert.equal(store.device.internalFree, 20000)
+  }
+
+  receive({ v: 2, dma_largest: 0, internal_free: 0 })
+  receive({ seq: store.seq + 1, dma_largest: 0, internal_free: 0 })
+
+  assert.equal(store.device.dmaLargest, 4096)
+  assert.equal(store.device.internalFree, 20000)
+
+  receive({ dma_largest: -1, internal_free: 25000 })
+
+  assert.equal(store.device.dmaLargest, 4096)
+  assert.equal(store.device.internalFree, 25000)
+
+  receive({ dma_largest: 0, internal_free: 0xffffffff })
+
+  assert.equal(store.device.dmaLargest, 0)
+  assert.equal(store.device.internalFree, 0xffffffff)
+  assert.equal(frames.length, writes, 'Memory diagnostics must not trigger serial writes')
+})
+
 test('ready metadata publishes the registered profile and rejects conflicting screens', () => {
   const { store, link, frames } = setup()
 

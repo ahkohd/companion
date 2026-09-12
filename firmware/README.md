@@ -8,6 +8,8 @@ See the [hardware compatibility table](../README.md#hardware-compatibility) for 
 
 ## Build and flash
 
+Ordinary allocations prefer PSRAM to leave internal RAM available for display DMA. If `firmware/sdkconfig` already exists, set `CONFIG_SPIRAM_USE_MALLOC=y` and `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=0` there before building. SDK defaults do not override an existing configuration.
+
 From the repository root:
 
 ```sh
@@ -96,6 +98,8 @@ When no valid host frame has arrived for 8 seconds, the face shows Disconnected 
 ```json
 {"type":"ready","v":1,"board":"waveshare-1.75-b"}
 ```
+
+ACKs include `dma_largest` (largest free internal DMA block) and `internal_free` (total free internal memory), both in bytes. The bridge exposes them as `device.dmaLargest` and `device.internalFree` in `/api/state`. Display error 257 means an allocation failed; these counters help distinguish low free memory from fragmentation, but do not by themselves prove a leak.
 
 ## Native expressions and live mappings
 

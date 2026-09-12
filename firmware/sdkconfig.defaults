@@ -16,6 +16,10 @@ CONFIG_SPIRAM=y
 CONFIG_SPIRAM_MODE_OCT=y
 CONFIG_SPIRAM_SPEED_80M=y
 CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
+# Prefer PSRAM for ordinary allocations; preserve internal RAM for display DMA.
+CONFIG_SPIRAM_USE_MALLOC=y
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=0
+
 # Keep read-only assets in flash to leave PSRAM for display buffers.
 # CONFIG_SPIRAM_RODATA is not set
 # CONFIG_SPIRAM_XIP_FROM_PSRAM is not set

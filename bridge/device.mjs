@@ -84,9 +84,19 @@ export class DeviceLink {
       } else if (message.type === 'ack' && this.ready && Number.isSafeInteger(message.seq) && message.seq >= 0 && message.seq <= this.store.seq) {
         this.lastAck = Date.now();
         const update = { lastAck: this.lastAck, lastAckSeq: message.seq };
-        for (const [wire,field] of [['touch_reads','touchReads'],['touch_errors','touchErrors'],['touch_revision','touchRevision']]) {
-          if (Number.isInteger(message[wire]) && message[wire]>=0 && message[wire]<=0xffffffff) update[field]=message[wire];
+        for (const [wire, field] of [
+          ['touch_reads', 'touchReads'],
+          ['touch_errors', 'touchErrors'],
+          ['touch_revision', 'touchRevision'],
+          ['dma_largest', 'dmaLargest'],
+          ['internal_free', 'internalFree'],
+        ]) {
+          const value = message[wire];
+          if (Number.isInteger(value) && value >= 0 && value <= 0xffffffff) {
+            update[field] = value;
+          }
         }
+
         if (Number.isSafeInteger(message.rendered_seq) && message.rendered_seq >= 0 && message.rendered_seq <= this.store.seq &&
             Number.isSafeInteger(message.render_us) && message.render_us >= 0 && message.render_us < 10000000 &&
             Array.isArray(message.eyes) && message.eyes.length === 2 && message.eyes.every(eye =>
