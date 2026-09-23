@@ -273,7 +273,6 @@ export default function Attention({
             <h2>Compose a request</h2>
             <p>Try it here before connecting your agents and tools.</p>
           </div>
-          <Send size={17} />
         </div>
         <form onSubmit={submit} className="attention-composer">
           <div className="attention-kinds" role="group" aria-label="Request type">
